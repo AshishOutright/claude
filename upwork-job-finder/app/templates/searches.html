@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Searches & alerts · Job Finder{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Alerts</h2>
+  <p>Saved searches with alerts on run every <b>{{ interval }} minutes</b> while the app is running. New jobs scoring
+    <b>{{ min_score }}+</b> are sent to:
+    <span class="pill {{ 'ok' if email_on else 'muted' }}">Email {{ 'on' if email_on else 'off' }}</span>
+    <span class="pill {{ 'ok' if telegram_on else 'muted' }}">Telegram {{ 'on' if telegram_on else 'off' }}</span>
+    and always appear as <b>New</b> on the dashboard.</p>
+  <form method="post" action="/searches/run-all"><button class="btn ghost">Run all alerts now</button></form>
+</section>
+
+<section class="layout">
+  <div class="card">
+    <h2>{{ 'Edit search' if editing else 'New saved search' }}</h2>
+    {% set s = editing or {} %}
+    <form method="post" action="/searches" class="stack">
+      <input type="hidden" name="search_id" value="{{ s.id or '' }}">
+      <label>Name<input name="name" value="{{ s.name or '' }}" placeholder="CRM projects"></label>
+      <label>Search keywords<input name="query" value="{{ s.query or '' }}" required placeholder="SuiteCRM OR SugarCRM"></label>
+      <label>Preferred skills (comma separated, boosts score)<input name="skills" value="{{ s.skills or '' }}" placeholder="PHP, MySQL, API"></label>
+      <label>Exclude jobs containing<input name="exclude_words" value="{{ s.exclude_words or '' }}" placeholder="wordpress, scraping"></label>
+      <div class="grid2">
+        <label>Job type
+          <select name="job_type">
+            <option value="">Any</option>
+            <option value="FIXED" {% if s.job_type == 'FIXED' %}selected{% endif %}>Fixed</option>
+            <option value="HOURLY" {% if s.job_type == 'HOURLY' %}selected{% endif %}>Hourly</option>
+          </select></label>
+        <label>Experience
+          <select name="experience">
+            <option value="">Any</option>
+            {% for e in ['ENTRY_LEVEL','INTERMEDIATE','EXPERT'] %}
+            <option value="{{ e }}" {% if s.experience == e %}selected{% endif %}>{{ e|replace('_',' ')|title }}</option>
+            {% endfor %}
+          </select></label>
+        <label>Min fixed budget ($)<input type="number" min="0" name="min_budget" value="{{ (s.min_budget or 0)|int }}"></label>
+        <label>Min hourly rate ($)<input type="number" min="0" name="min_hourly" value="{{ (s.min_hourly or 0)|int }}"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="verified_only" value="1" {% if s.verified_only %}checked{% endif %}> Payment-verified clients only</label>
+      <label class="check"><input type="checkbox" name="alerts_enabled" value="1" {% if s.alerts_enabled or not editing %}checked{% endif %}> Send alerts for new matches</label>
+      <div class="row-actions">
+        <button class="btn">Save search</button>
+        {% if editing %}<a class="btn ghost" href="/searches">Cancel</a>{% endif %}
+      </div>
+    </form>
+  </div>
+
+  <div>
+    {% if not searches %}<div class="empty card">No saved searches yet.</div>{% endif %}
+    {% for s in searches %}
+    <div class="card search-row">
+      <div>
+        <h3>{{ s.name }} {% if s.alerts_enabled %}<span class="pill ok">alerts on</span>{% else %}<span class="pill muted">alerts off</span>{% endif %}</h3>
+        <div class="meta">
+          <span>“{{ s.query }}”</span>
+          {% if s.job_type %}<span>{{ s.job_type|title }}</span>{% endif %}
+          {% if s.min_budget %}<span>≥ ${{ s.min_budget|int }}</span>{% endif %}
+          {% if s.min_hourly %}<span>≥ ${{ s.min_hourly|int }}/hr</span>{% endif %}
+          {% if s.verified_only %}<span>Verified only</span>{% endif %}
+          <span>Last run: {{ s.last_run|ts }}</span>
+        </div>
+      </div>
+      <div class="actions">
+        <form method="post" action="/searches/{{ s.id }}/run"><button class="btn small">Run</button></form>
+        <a class="btn small ghost" href="/searches?edit={{ s.id }}">Edit</a>
+        <a class="btn small ghost" href="/?search_id={{ s.id }}">Results</a>
+        <form method="post" action="/searches/{{ s.id }}/delete" onsubmit="return confirm('Delete this search?')"><button class="btn small danger">Delete</button></form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

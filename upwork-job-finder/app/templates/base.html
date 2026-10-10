@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Upwork Job Finder{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="logo">◎</span> Job Finder</a>
+  <nav>
+    <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
+    <a href="/searches" class="{% if request.url.path.startswith('/searches') %}active{% endif %}">Searches &amp; alerts</a>
+  </nav>
+  <div class="conn">
+    {% if demo %}
+      <span class="pill warn" title="Set UPWORK_CLIENT_ID in .env to use real Upwork data">Demo data</span>
+    {% elif connected %}
+      <span class="pill ok">Upwork connected</span>
+      <form method="post" action="/auth/logout" class="inline"><button class="link">Disconnect</button></form>
+    {% else %}
+      <a class="btn small" href="/auth/login">Connect Upwork</a>
+    {% endif %}
+    {% if not claude_ready %}<span class="pill muted" title="Set ANTHROPIC_API_KEY in .env">Claude off</span>{% endif %}
+  </div>
+</header>
+<main class="wrap">
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="flash err">{{ err }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

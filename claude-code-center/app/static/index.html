@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/vendor/github-dark.min.css">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/marked.min.js"></script>
+  <script src="/static/vendor/purify.min.js"></script>
+  <script src="/static/vendor/highlight.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      <div class="brand"><span class="mark">&lt;/&gt;</span> Code Center</div>
+      <button class="icon-btn only-mobile" id="close-side" title="Close">✕</button>
+    </div>
+    <button class="btn new-chat" id="new-chat">＋ New chat</button>
+    <input class="search" id="search" placeholder="Search chats…">
+    <nav class="conv-list" id="conv-list"></nav>
+    <div class="side-foot" id="usage"></div>
+  </aside>
+
+  <main class="main">
+    <header class="chat-head">
+      <button class="icon-btn only-mobile" id="open-side" title="Chats">☰</button>
+      <h1 id="chat-title" title="Click to rename">New chat</h1>
+      <div class="head-controls">
+        <select id="model" title="Model"></select>
+        <button class="btn ghost small" id="toggle-system" title="System prompt">System prompt</button>
+        <button class="btn ghost small" id="export" title="Download as Markdown">Export</button>
+      </div>
+    </header>
+
+    <section class="system-panel hidden" id="system-panel">
+      <div class="system-row">
+        <label>Preset <select id="preset"></select></label>
+        <span class="hint">Applies to this chat. Saved automatically.</span>
+      </div>
+      <textarea id="system-prompt" rows="5" placeholder="Instructions Claude follows for this whole chat"></textarea>
+    </section>
+
+    <div class="banner hidden" id="key-banner">
+      <b>ANTHROPIC_API_KEY</b> isn't set. Add it to <code>claude-code-center/.env</code> and restart the app.
+    </div>
+
+    <section class="messages" id="messages"></section>
+
+    <footer class="composer">
+      <div class="attachments" id="attachments"></div>
+      <div class="input-row">
+        <label class="icon-btn attach" title="Attach code files (read as text)">
+          📎<input type="file" id="file-input" multiple hidden>
+        </label>
+        <textarea id="input" rows="1" placeholder="Ask for code, paste an error, or describe a project…  (Enter to send, Shift+Enter for new line)"></textarea>
+        <button class="btn send" id="send">Send</button>
+        <button class="btn stop hidden" id="stop">Stop</button>
+      </div>
+    </footer>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

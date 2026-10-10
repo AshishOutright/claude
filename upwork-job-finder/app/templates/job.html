@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} · Job Finder{% endblock %}
+{% block content %}
+<a href="/" class="back">← Back to jobs</a>
+<section class="card job-detail">
+  <div class="head">
+    <div class="score big s{{ (job.score // 25) * 25 }}">{{ job.score }}</div>
+    <div>
+      <h1>{{ job.title }}</h1>
+      <div class="meta">
+        <span class="money">{{ job|money }}</span>
+        {% if job.experience %}<span>{{ job.experience|replace('_',' ')|title }}</span>{% endif %}
+        <span>Posted {{ job.posted_at|ago }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="client">
+    <span><b>Client:</b> {{ job.client_country or 'Unknown' }}</span>
+    <span>{% if job.payment_verified %}<span class="ok-text">✓ Payment verified</span>{% else %}<span class="muted-text">Payment unverified</span>{% endif %}</span>
+    {% if job.client_rating %}<span>★ {{ '%.1f'|format(job.client_rating) }}</span>{% endif %}
+    <span>{{ job.client_hires or 0 }} hires</span>
+    {% if job.client_spent %}<span>${{ '{:,.0f}'.format(job.client_spent) }} spent</span>{% endif %}
+  </div>
+  <div class="tags">{% for s in job.skills %}<span class="tag">{{ s }}</span>{% endfor %}</div>
+  <div class="description">{{ job.description }}</div>
+  <div class="row-actions">
+    <a class="btn" href="{{ job.url }}" target="_blank" rel="noopener">Open on Upwork ↗</a>
+    <form method="post" action="/jobs/{{ job.id }}/flag">
+      <input type="hidden" name="flag" value="is_saved"><input type="hidden" name="value" value="{{ 0 if job.is_saved else 1 }}">
+      <input type="hidden" name="back" value="/jobs/{{ job.id }}">
+      <button class="btn ghost">{{ 'Unsave' if job.is_saved else 'Save job' }}</button>
+    </form>
+  </div>
+</section>
+
+<section class="card" id="proposals">
+  <h2>Draft a proposal with Claude</h2>
+  {% if not claude_ready %}<p class="muted-text">Add <code>ANTHROPIC_API_KEY</code> to your <code>.env</code> to enable this.</p>{% endif %}
+  <form method="post" action="/jobs/{{ job.id }}/proposal" class="proposal-form" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Writing…'">
+    <select name="tone">
+      <option value="professional">Professional</option>
+      <option value="friendly and conversational">Friendly</option>
+      <option value="very concise, under 100 words">Short &amp; punchy</option>
+      <option value="consultative, lead with a diagnosis of their problem">Consultative</option>
+    </select>
+    <input name="extra" placeholder="Optional: anything to mention (rate, availability, a past project…)">
+    <button class="btn" {% if not claude_ready %}disabled{% endif %}>Generate</button>
+  </form>
+  {% for p in proposals %}
+  <div class="proposal">
+    <div class="proposal-head">
+      <span class="muted-text">{{ p.created_at|ts }}</span>
+      <button class="btn small ghost" onclick="navigator.clipboard.writeText(this.closest('.proposal').querySelector('textarea').value);this.textContent='Copied'">Copy</button>
+    </div>
+    <textarea rows="10">{{ p.content }}</textarea>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}

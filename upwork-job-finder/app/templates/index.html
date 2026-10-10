@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="stats">
+  <div class="stat"><span class="num">{{ stats.total }}</span><span class="lbl">Jobs tracked</span></div>
+  <div class="stat accent"><span class="num" id="new-count">{{ stats.new }}</span><span class="lbl">New</span></div>
+  <div class="stat"><span class="num">{{ stats.saved }}</span><span class="lbl">Saved</span></div>
+  <div class="stat"><span class="num">{{ stats.avg_score|int }}</span><span class="lbl">Avg match score</span></div>
+</section>
+
+<section class="card">
+  <h2>Search Upwork</h2>
+  <form method="post" action="/quick-search" class="quick">
+    <input name="query" placeholder="e.g. SuiteCRM, Python FastAPI, CRM migration" required>
+    <select name="job_type">
+      <option value="">Any type</option><option value="FIXED">Fixed</option><option value="HOURLY">Hourly</option>
+    </select>
+    <input name="min_budget" type="number" min="0" placeholder="Min fixed $" class="narrow">
+    <input name="min_hourly" type="number" min="0" placeholder="Min $/hr" class="narrow">
+    <label class="check"><input type="checkbox" name="verified_only" value="1"> Verified payment</label>
+    <label class="check"><input type="checkbox" name="save" value="1"> Save as alert</label>
+    <button class="btn">Search</button>
+  </form>
+</section>
+
+<section class="layout">
+  <aside class="filters card">
+    <form method="get" action="/">
+      <h3>Show</h3>
+      {% for v, label in [('all','All'),('new','New'),('saved','Saved'),('hidden','Hidden')] %}
+        <label class="radio"><input type="radio" name="view" value="{{ v }}" {% if f.view == v %}checked{% endif %} onchange="this.form.submit()"> {{ label }}</label>
+      {% endfor %}
+      <h3>Filter</h3>
+      <input name="q" value="{{ f.q }}" placeholder="Keyword in results">
+      <select name="search_id">
+        <option value="">All searches</option>
+        {% for s in searches %}<option value="{{ s.id }}" {% if f.search_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+      </select>
+      <select name="job_type">
+        <option value="">Any type</option>
+        <option value="FIXED" {% if f.job_type == 'FIXED' %}selected{% endif %}>Fixed</option>
+        <option value="HOURLY" {% if f.job_type == 'HOURLY' %}selected{% endif %}>Hourly</option>
+      </select>
+      <label class="range">Min score: <output>{{ f.min_score }}</output>
+        <input type="range" name="min_score" min="0" max="100" step="5" value="{{ f.min_score }}" oninput="this.previousElementSibling.value=this.value">
+      </label>
+      <h3>Sort</h3>
+      <select name="sort">
+        <option value="score" {% if f.sort == 'score' %}selected{% endif %}>Best match</option>
+        <option value="recent" {% if f.sort == 'recent' %}selected{% endif %}>Newest</option>
+        <option value="budget" {% if f.sort == 'budget' %}selected{% endif %}>Highest budget</option>
+      </select>
+      <button class="btn full">Apply</button>
+    </form>
+    <form method="post" action="/jobs/mark-seen"><button class="btn ghost full">Mark all seen</button></form>
+  </aside>
+
+  <div class="jobs">
+    {% if not jobs %}
+      <div class="empty card">No jobs here yet. Run a search above{% if not searches %}, or create a saved search with alerts{% endif %}.</div>
+    {% endif %}
+    {% for j in jobs %}
+    <article class="job card {% if j.is_new %}is-new{% endif %}">
+      <div class="score s{{ (j.score // 25) * 25 }}" title="Match score">{{ j.score }}</div>
+      <div class="body">
+        <h3><a href="/jobs/{{ j.id }}">{{ j.title }}</a>{% if j.is_new %} <span class="pill new">new</span>{% endif %}</h3>
+        <div class="meta">
+          <span class="money">{{ j|money }}</span>
+          {% if j.experience %}<span>{{ j.experience|replace('_',' ')|title }}</span>{% endif %}
+          <span>{{ j.posted_at|ago }}</span>
+          {% if j.client_country %}<span>{{ j.client_country }}</span>{% endif %}
+          {% if j.payment_verified %}<span class="ok-text">✓ Verified</span>{% else %}<span class="muted-text">Unverified</span>{% endif %}
+          {% if j.client_rating %}<span>★ {{ '%.1f'|format(j.client_rating) }}</span>{% endif %}
+        </div>
+        <p class="desc">{{ j.description[:260] }}{% if j.description|length > 260 %}…{% endif %}</p>
+        <div class="tags">{% for s in j.skills[:8] %}<span class="tag">{{ s }}</span>{% endfor %}</div>
+      </div>
+      <div class="actions">
+        <a class="btn small" href="/jobs/{{ j.id }}">Open</a>
+        <form method="post" action="/jobs/{{ j.id }}/flag">
+          <input type="hidden" name="flag" value="is_saved"><input type="hidden" name="value" value="{{ 0 if j.is_saved else 1 }}">
+          <input type="hidden" name="back" value="{{ request.url.path }}?{{ request.url.query }}">
+          <button class="btn small ghost">{{ 'Unsave' if j.is_saved else 'Save' }}</button>
+        </form>
+        <form method="post" action="/jobs/{{ j.id }}/flag">
+          <input type="hidden" name="flag" value="is_hidden"><input type="hidden" name="value" value="{{ 0 if j.is_hidden else 1 }}">
+          <input type="hidden" name="back" value="{{ request.url.path }}?{{ request.url.query }}">
+          <button class="btn small ghost">{{ 'Unhide' if j.is_hidden else 'Hide' }}</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<script>
+  // Refresh the "New" counter every minute so background alerts show up.
+  setInterval(async () => {
+    try {
+      const r = await fetch('/api/stats'); const s = await r.json();
+      const el = document.getElementById('new-count');
+      if (el && String(s.new) !== el.textContent) { el.textContent = s.new; document.title = `(${s.new}) Upwork Job Finder`; }
+    } catch (e) {}
+  }, 60000);
+</script>
+{% endblock %}

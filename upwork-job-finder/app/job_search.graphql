@@ -1,0 +1,39 @@
+# Upwork GraphQL job search. Edit fields here if Upwork changes its schema
+# (explore it at https://www.upwork.com/developer/documentation/graphql/api/docs/index.html).
+query jobSearch(
+  $marketPlaceJobFilter: MarketplaceJobPostingsSearchFilter
+  $searchType: MarketplaceJobPostingSearchType
+  $sortAttributes: [MarketplaceJobPostingSearchSortAttribute]
+) {
+  marketplaceJobPostingsSearch(
+    marketPlaceJobFilter: $marketPlaceJobFilter
+    searchType: $searchType
+    sortAttributes: $sortAttributes
+  ) {
+    totalCount
+    edges {
+      node {
+        id
+        title
+        description
+        ciphertext
+        createdDateTime
+        experienceLevel
+        engagement
+        duration
+        amount { rawValue currency }
+        hourlyBudgetMin { rawValue }
+        hourlyBudgetMax { rawValue }
+        skills { name }
+        client {
+          totalHires
+          totalFeedback
+          verificationStatus
+          totalSpent { rawValue }
+          location { country }
+        }
+      }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}
