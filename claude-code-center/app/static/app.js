@@ -345,6 +345,7 @@ function localStorageSafe(op, key, val) {
   for (const name of Object.keys(state.cfg.presets)) $("#preset").append(new Option(name, name));
   $("#preset").append(new Option("Custom", "__custom"));
   $("#key-banner").classList.toggle("hidden", state.cfg.api_key_set);
+  if (state.cfg.scope_url) { $("#scope-link").href = state.cfg.scope_url; $("#scope-link").classList.remove("hidden"); }
   await loadConversations();
   const last = Number(localStorageSafe("get", "lastConv"));
   if (last && state.convs.some((c) => c.id === last)) await openConversation(last);

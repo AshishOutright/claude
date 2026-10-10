@@ -17,6 +17,14 @@ if DEFAULT_MODEL not in MODELS:
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "16000"))
 # How many earlier messages to send with each request (keeps cost in check on long chats)
 HISTORY_LIMIT = int(os.getenv("HISTORY_LIMIT", "40"))
+# Link to the Upwork Job Finder's "Know API key scope" page (top-right button).
+# On Render this is filled in automatically with the Job Finder's host name.
+_jf = os.getenv("JOB_FINDER_URL", "http://localhost:8001").strip().rstrip("/")
+if _jf and not _jf.startswith(("http://", "https://")):
+    # Render passes the internal service name (no dots); its public URL is <name>.onrender.com
+    _jf = "https://" + (_jf if "." in _jf else f"{_jf}.onrender.com")
+JOB_FINDER_SCOPE_URL = f"{_jf}/api-scope" if _jf else ""
+
 DB_PATH = Path(os.getenv("DB_PATH", BASE_DIR / "data" / "chats.db"))
 
 PRESETS = {

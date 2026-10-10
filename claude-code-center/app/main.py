@@ -46,7 +46,7 @@ def get_config():
     return {"models": config.MODELS, "default_model": config.DEFAULT_MODEL,
             "presets": config.PRESETS, "default_preset": config.DEFAULT_PRESET,
             "api_key_set": bool(config.ANTHROPIC_API_KEY), "usage": db.usage_totals(),
-            "auth_on": bool(auth.APP_PASSWORD)}
+            "auth_on": bool(auth.APP_PASSWORD), "scope_url": config.JOB_FINDER_SCOPE_URL}
 
 
 # ---------------- conversations ----------------

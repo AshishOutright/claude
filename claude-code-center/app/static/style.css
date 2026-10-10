@@ -116,3 +116,5 @@ select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; b
   .ideas { grid-template-columns: 1fr; }
 }
 .side-foot a { color: var(--muted); }
+a.btn { text-decoration: none; display: inline-block; white-space: nowrap; }
+@media (max-width: 800px) { .head-controls { flex-wrap: wrap; } }
