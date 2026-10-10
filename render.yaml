@@ -7,6 +7,10 @@ services:
     runtime: python
     plan: free
     rootDir: claude-code-center
+    autoDeploy: true             # deploy every push to main...
+    buildFilter:                 # ...but only when this app's own folder changes
+      paths:
+        - claude-code-center/**
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
@@ -32,6 +36,10 @@ services:
     runtime: python
     plan: free
     rootDir: upwork-job-finder
+    autoDeploy: true             # deploy every push to main...
+    buildFilter:                 # ...but only when this app's own folder changes
+      paths:
+        - upwork-job-finder/**
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
