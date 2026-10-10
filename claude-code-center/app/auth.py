@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from . import config  # noqa: F401  (loads .env before reading settings below)
 
-APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+APP_PASSWORD = os.getenv("APP_PASSWORD", "").strip()
 SECRET = os.getenv("SECRET_KEY", "") or hashlib.sha256(("salt:" + APP_PASSWORD).encode()).hexdigest()
 COOKIE = "app_session"
 OPEN_PATHS = ("/login", "/healthz", "/static/")
@@ -75,7 +75,7 @@ def install(app: FastAPI, title: str, accent: str = "#c96442"):
         next_url = str(form.get("next") or "/")
         if not next_url.startswith("/") or next_url.startswith("//"):
             next_url = "/"
-        if not hmac.compare_digest(str(form.get("password", "")), APP_PASSWORD):
+        if not hmac.compare_digest(str(form.get("password", "")).strip(), APP_PASSWORD):
             await asyncio.sleep(1)  # slow down guessing
             return page(next_url, "Wrong password.")
         resp = RedirectResponse(next_url, status_code=303)

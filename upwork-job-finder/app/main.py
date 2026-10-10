@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Upwork Job Finder", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 auth.install(app, "Upwork Job Finder", "#108a00")
+db.init()  # create tables at import too, so every way of starting the app works
 templates = Jinja2Templates(directory=HERE / "templates")
 
 
