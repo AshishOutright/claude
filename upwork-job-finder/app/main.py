@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import alerts, config, db, proposals, scoring, upwork_client
+from . import alerts, auth, config, db, proposals, scoring, upwork_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 HERE = Path(__file__).parent
@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Upwork Job Finder", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+auth.install(app, "Upwork Job Finder", "#108a00")
 templates = Jinja2Templates(directory=HERE / "templates")
 
 
@@ -72,7 +73,7 @@ def redirect(url: str, msg: str = "", err: bool = False):
 
 
 def ctx(request: Request, **kw):
-    return {"request": request, "connected": upwork_client.is_connected(),
+    return {"request": request, "connected": upwork_client.is_connected(), "auth_on": bool(auth.APP_PASSWORD),
             "demo": config.DEMO_MODE, "claude_ready": bool(config.ANTHROPIC_API_KEY),
             "msg": request.query_params.get("msg"), "err": request.query_params.get("err"), **kw}
 

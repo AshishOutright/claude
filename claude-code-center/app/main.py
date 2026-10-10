@@ -9,11 +9,12 @@ from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import config, db
+from . import auth, config, db
 
 HERE = Path(__file__).parent
 app = FastAPI(title="Claude Code Center")
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+auth.install(app, "Claude Code Center", "#c96442")
 db.init()
 
 
@@ -44,7 +45,8 @@ def index():
 def get_config():
     return {"models": config.MODELS, "default_model": config.DEFAULT_MODEL,
             "presets": config.PRESETS, "default_preset": config.DEFAULT_PRESET,
-            "api_key_set": bool(config.ANTHROPIC_API_KEY), "usage": db.usage_totals()}
+            "api_key_set": bool(config.ANTHROPIC_API_KEY), "usage": db.usage_totals(),
+            "auth_on": bool(auth.APP_PASSWORD)}
 
 
 # ---------------- conversations ----------------

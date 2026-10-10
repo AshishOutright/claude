@@ -115,3 +115,4 @@ select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; b
   .messages, .composer { padding-left: 12px; padding-right: 12px; }
   .ideas { grid-template-columns: 1fr; }
 }
+.side-foot a { color: var(--muted); }

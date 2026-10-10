@@ -24,6 +24,7 @@
     {% else %}
       <a class="btn small" href="/auth/login">Connect Upwork</a>
     {% endif %}
+    {% if auth_on %}<a class="link-muted" href="/logout">Sign out</a>{% endif %}
     {% if not claude_ready %}<span class="pill muted" title="Set ANTHROPIC_API_KEY in .env">Claude off</span>{% endif %}
   </div>
 </header>

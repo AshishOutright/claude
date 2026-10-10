@@ -4,6 +4,7 @@ const state = { cfg: null, convs: [], current: null, streaming: false, abort: nu
 
 const api = async (path, opts = {}) => {
   const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (r.status === 401) { location.href = "/login"; throw new Error("Not signed in"); }
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch (e) {}
@@ -89,7 +90,8 @@ const patchConv = (id, data) => api(`/api/conversations/${id}`, { method: "PATCH
 
 async function refreshUsage() {
   const cfg = await api("/api/config");
-  $("#usage").textContent = `All-time tokens: ${fmtTokens(cfg.usage.input_tokens)} in · ${fmtTokens(cfg.usage.output_tokens)} out`;
+  $("#usage").innerHTML = `All-time tokens: ${fmtTokens(cfg.usage.input_tokens)} in · ${fmtTokens(cfg.usage.output_tokens)} out` +
+    (cfg.auth_on ? ` · <a href="/logout">Sign out</a>` : "");
 }
 
 // ---------------- chat view ----------------

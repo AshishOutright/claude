@@ -107,3 +107,4 @@ form.inline { display: inline; }
   .proposal-form { grid-template-columns: 1fr; }
   .search-row { flex-direction: column; }
 }
+.link-muted { color: var(--muted); font-size: 13px; }

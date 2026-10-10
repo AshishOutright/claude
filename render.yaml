@@ -1,0 +1,49 @@
+# Render Blueprint: deploys both apps as password-protected web services.
+# Deploy: https://render.com/deploy?repo=https://github.com/AshishOutright/claude
+# Render asks for every value marked `sync: false` during setup.
+services:
+  - type: web
+    name: claude-code-center
+    runtime: python
+    plan: free
+    rootDir: claude-code-center
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: APP_PASSWORD          # password to open the app
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-sonnet-5-5
+      - key: SECRET_KEY
+        generateValue: true
+
+  - type: web
+    name: upwork-job-finder
+    runtime: python
+    plan: free
+    rootDir: upwork-job-finder
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: APP_PASSWORD          # password to open the app
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FREELANCER_PROFILE
+        sync: false
+      - key: UPWORK_CLIENT_ID      # leave blank for demo mode
+        sync: false
+      - key: UPWORK_CLIENT_SECRET
+        sync: false
+      - key: UPWORK_REDIRECT_URI   # https://<your-service>.onrender.com/auth/callback
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
