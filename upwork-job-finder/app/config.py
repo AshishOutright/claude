@@ -20,6 +20,9 @@ UPWORK_AUTH_URL = "https://www.upwork.com/ab/account-security/oauth2/authorize"
 UPWORK_TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token"
 UPWORK_GRAPHQL_URL = "https://api.upwork.com/graphql"
 UPWORK_TENANT_ID = os.getenv("UPWORK_TENANT_ID", "")  # optional organization id
+# Optional: a refresh token obtained elsewhere (e.g. the PHP token helper). When set, the app
+# logs in to Upwork with it automatically, so no "Connect Upwork" click is needed after restarts.
+UPWORK_REFRESH_TOKEN = os.getenv("UPWORK_REFRESH_TOKEN", "").strip()
 
 # Demo mode shows sample jobs so you can try the UI before Upwork approves your key.
 DEMO_MODE = _bool("DEMO_MODE", default=not UPWORK_CLIENT_ID)

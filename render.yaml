@@ -48,7 +48,9 @@ services:
         sync: false
       - key: UPWORK_CLIENT_SECRET
         sync: false
-      - key: UPWORK_REDIRECT_URI   # https://<your-service>.onrender.com/auth/callback
+      - key: UPWORK_REDIRECT_URI   # must equal the callback URL registered on your Upwork key
+        sync: false
+      - key: UPWORK_REFRESH_TOKEN  # optional: from tools/upwork-token-php, skips "Connect Upwork"
         sync: false
       - key: SECRET_KEY
         generateValue: true

@@ -44,8 +44,20 @@ def exchange_code(code: str) -> dict:
                            "redirect_uri": config.UPWORK_REDIRECT_URI})
 
 
+def _bootstrap_from_env() -> dict | None:
+    """Log in with UPWORK_REFRESH_TOKEN from settings when no token is stored yet."""
+    if not config.UPWORK_REFRESH_TOKEN:
+        return None
+    try:
+        _token_request({"grant_type": "refresh_token", "refresh_token": config.UPWORK_REFRESH_TOKEN})
+    except UpworkError as e:
+        raise UpworkError(f"UPWORK_REFRESH_TOKEN was rejected ({e}). It may have expired or been used "
+                          "already: get a new one from the token helper, or click 'Connect Upwork'.") from e
+    return db.get_tokens()
+
+
 def access_token() -> str:
-    tok = db.get_tokens()
+    tok = db.get_tokens() or _bootstrap_from_env()
     if not tok:
         raise UpworkError("Not connected to Upwork yet. Click 'Connect Upwork' on the dashboard.")
     if tok["expires_at"] and time.time() > tok["expires_at"]:
@@ -57,7 +69,7 @@ def access_token() -> str:
 
 
 def is_connected() -> bool:
-    return config.DEMO_MODE or db.get_tokens() is not None
+    return config.DEMO_MODE or db.get_tokens() is not None or bool(config.UPWORK_REFRESH_TOKEN)
 
 
 # ---------------- GraphQL ----------------
