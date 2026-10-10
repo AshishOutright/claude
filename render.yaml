@@ -60,5 +60,7 @@ services:
         sync: false
       - key: UPWORK_REFRESH_TOKEN  # optional: from tools/upwork-token-php, skips "Connect Upwork"
         sync: false
+      - key: UPWORK_IMPORT_KEY     # random secret; copy it into the PHP helper's config.php
+        generateValue: true
       - key: SECRET_KEY
         generateValue: true

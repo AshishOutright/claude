@@ -243,6 +243,27 @@ def auth_callback(request: Request, code: str = "", state: str = "", error: str 
     return redirect("/", "Connected to Upwork.")
 
 
+@app.post("/auth/import")
+async def auth_import(request: Request):
+    """Receive Upwork tokens from the PHP token helper (server-to-server, protected by UPWORK_IMPORT_KEY)."""
+    import hmac
+    key = config.UPWORK_IMPORT_KEY
+    if not key:
+        return JSONResponse({"ok": False, "error": "Import is disabled (UPWORK_IMPORT_KEY not set)."}, 404)
+    if not hmac.compare_digest(request.headers.get("x-import-key", ""), key):
+        return JSONResponse({"ok": False, "error": "Wrong import key."}, 401)
+    try:
+        data = await request.json()
+        access, refresh = str(data["access_token"]), str(data.get("refresh_token") or "")
+        expires_in = int(data.get("expires_in") or 3600)
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Expected JSON with access_token, refresh_token, expires_in."}, 400)
+    if not access:
+        return JSONResponse({"ok": False, "error": "Empty access_token."}, 400)
+    db.save_tokens(access, refresh, expires_in)
+    return JSONResponse({"ok": True, "message": "Job Finder is now connected to Upwork."})
+
+
 @app.post("/auth/logout")
 def auth_logout():
     db.clear_tokens()

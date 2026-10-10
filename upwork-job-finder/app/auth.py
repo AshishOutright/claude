@@ -17,7 +17,7 @@ from . import config  # noqa: F401  (loads .env before reading settings below)
 APP_PASSWORD = os.getenv("APP_PASSWORD", "").strip()
 SECRET = os.getenv("SECRET_KEY", "") or hashlib.sha256(("salt:" + APP_PASSWORD).encode()).hexdigest()
 COOKIE = "app_session"
-OPEN_PATHS = ("/login", "/healthz", "/static/", "/api-scope")  # api-scope is a shareable info page
+OPEN_PATHS = ("/login", "/healthz", "/static/", "/api-scope", "/auth/import")  # import has its own key check
 
 LOGIN_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · {title}</title>

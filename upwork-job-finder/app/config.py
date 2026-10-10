@@ -23,6 +23,9 @@ UPWORK_TENANT_ID = os.getenv("UPWORK_TENANT_ID", "")  # optional organization id
 # Optional: a refresh token obtained elsewhere (e.g. the PHP token helper). When set, the app
 # logs in to Upwork with it automatically, so no "Connect Upwork" click is needed after restarts.
 UPWORK_REFRESH_TOKEN = os.getenv("UPWORK_REFRESH_TOKEN", "").strip()
+# Shared secret that lets the PHP token helper on your website hand tokens to this app
+# (POST /auth/import). Leave empty to disable that endpoint.
+UPWORK_IMPORT_KEY = os.getenv("UPWORK_IMPORT_KEY", "").strip()
 
 # Demo mode shows sample jobs so you can try the UI before Upwork approves your key.
 DEMO_MODE = _bool("DEMO_MODE", default=not UPWORK_CLIENT_ID)

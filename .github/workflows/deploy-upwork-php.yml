@@ -1,0 +1,49 @@
+# Uploads tools/upwork-token-php/ to your web server (e.g. outrightsystems.org/upwork/)
+# whenever that folder changes on main. You can also run it by hand from the Actions tab.
+#
+# One-time setup — GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
+#   FTP_SERVER      e.g. ftp.outrightsystems.org
+#   FTP_USERNAME    your FTP / cPanel FTP account
+#   FTP_PASSWORD    its password
+#   FTP_SERVER_DIR  folder on the server, ending with /   e.g. public_html/upwork/
+# Optional repository *variable* (same page, Variables tab):
+#   FTP_PROTOCOL    ftps (default) or ftp
+#
+# config.php (your secrets) is never uploaded or deleted: create it once on the server yourself.
+name: Deploy Upwork PHP helper
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/upwork-token-php/**"
+      - ".github/workflows/deploy-upwork-php.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-upwork-php
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check PHP syntax
+        run: php -l tools/upwork-token-php/index.php
+
+      - name: Upload to server
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          local-dir: ./tools/upwork-token-php/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          exclude: |
+            config.php
+            README.md
+            **/.git*
+            **/.git*/**

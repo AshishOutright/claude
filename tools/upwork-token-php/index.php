@@ -6,20 +6,24 @@
  * callback URL registered on your Upwork API key, e.g.
  *     https://www.outrightsystems.org/upwork/
  *
- * Flow: sign in with ADMIN_PASSWORD → "Get token" → approve on Upwork →
+ * Flow: sign in with ADMIN_PASSWORD → "Connect Upwork" → approve on Upwork →
  * Upwork returns here with a one-time code → this page exchanges it for tokens
- * and shows them so you can copy the refresh token into the Job Finder
- * (Render → upwork-job-finder → Environment → UPWORK_REFRESH_TOKEN).
+ * → and (when JOB_FINDER_URL + JOB_FINDER_IMPORT_KEY are set) sends them
+ * straight to the Job Finder on Render, which is then connected.
  *
  * It also forwards Upwork replies that belong to the Job Finder's own
- * "Connect Upwork" button (when JOB_FINDER_CALLBACK is set).
+ * "Connect Upwork" button.
+ *
+ * Put your settings in config.php next to this file (see config.sample.php),
+ * so secrets never live in this file or in git.
  *
  * Tokens are kept only in your PHP session (never written to disk) and the
  * page sends no-cache / no-index headers.
  */
 
 // ============================ SETTINGS ============================
-// Values can also come from server environment variables of the same name.
+// Put real values in config.php (copy config.sample.php). Server environment
+// variables of the same name also work. These defaults are placeholders only.
 const DEFAULTS = [
     'UPWORK_CLIENT_ID'     => '',   // "Key" on upwork.com/developer/keys
     'UPWORK_CLIENT_SECRET' => '',   // "Secret" on upwork.com/developer/keys
@@ -27,9 +31,10 @@ const DEFAULTS = [
     'UPWORK_REDIRECT_URI'  => 'https://www.outrightsystems.org/upwork/',
     // Password to open this page. Use a long one; leaving it empty disables the page.
     'ADMIN_PASSWORD'       => '',
-    // Optional: your Job Finder callback, so its "Connect Upwork" button also works through this URL.
-    // e.g. https://upwork-job-finder.onrender.com/auth/callback  (leave '' to disable forwarding)
-    'JOB_FINDER_CALLBACK'  => '',
+    // Your Job Finder on Render, e.g. https://upwork-job-finder.onrender.com
+    'JOB_FINDER_URL'       => '',
+    // Same value as UPWORK_IMPORT_KEY in Render → upwork-job-finder → Environment
+    'JOB_FINDER_IMPORT_KEY'=> '',
     // Optional: Upwork organization (tenant) id, only if your account has several.
     'UPWORK_TENANT_ID'     => '',
 ];
@@ -39,10 +44,17 @@ const AUTH_URL    = 'https://www.upwork.com/ab/account-security/oauth2/authorize
 const TOKEN_URL   = 'https://www.upwork.com/api/v3/oauth2/token';
 const GRAPHQL_URL = 'https://api.upwork.com/graphql';
 
+$LOCAL = is_file(__DIR__ . '/config.php') ? (include __DIR__ . '/config.php') : [];
+if (!is_array($LOCAL)) $LOCAL = [];
+
 function cfg(string $k): string {
+    global $LOCAL;
+    if (isset($LOCAL[$k]) && trim((string)$LOCAL[$k]) !== '') return trim((string)$LOCAL[$k]);
     $env = getenv($k);
-    return trim($env !== false && $env !== '' ? $env : DEFAULTS[$k]);
+    return trim($env !== false && $env !== '' ? $env : (DEFAULTS[$k] ?? ''));
 }
+function jf_base(): string { return rtrim(cfg('JOB_FINDER_URL'), '/'); }
+function jf_ready(): bool { return jf_base() !== '' && cfg('JOB_FINDER_IMPORT_KEY') !== ''; }
 function h($s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function self_url(): string { return strtok($_SERVER['REQUEST_URI'] ?? '/', '?') ?: '/'; }
 function go(string $url): void { header('Location: ' . $url, true, 303); exit; }
@@ -63,11 +75,11 @@ session_start();
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(16));
 
 // ---------------------------------------------------------------- HTTP helpers
-function http_post(string $url, array $headers, string $body): array {
+function http_post(string $url, array $headers, string $body, int $timeout = 30): array {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_HTTPHEADER => $headers,
-        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30, CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => $timeout, CURLOPT_CONNECTTIMEOUT => 15,
     ]);
     $raw = curl_exec($ch);
     $err = curl_error($ch);
@@ -98,6 +110,20 @@ function token_request(array $params): array {
     ];
 }
 
+/** Hand tokens to the Job Finder on Render. Returns [ok, message]. */
+function send_to_job_finder(array $t): array {
+    if (!jf_ready()) return [false, 'Set JOB_FINDER_URL and JOB_FINDER_IMPORT_KEY in config.php to connect the Job Finder automatically.'];
+    [$code, $json, $raw] = http_post(jf_base() . '/auth/import',
+        ['Content-Type: application/json', 'X-Import-Key: ' . cfg('JOB_FINDER_IMPORT_KEY')],
+        json_encode(['access_token' => $t['access_token'], 'refresh_token' => $t['refresh_token'],
+                     'expires_in' => max(60, $t['expires_at'] - time())]), 90);
+    if ($code === 200 && !empty($json['ok'])) return [true, 'Connected! The Job Finder on Render is now connected to Upwork.'];
+    $why = $json['error'] ?? ($raw ?: "HTTP $code");
+    if ($code === 0) $why .= ' (the Render app may be asleep or deploying; try "Send to Job Finder" again in a minute)';
+    if ($code === 404) $why = 'The Job Finder has no import endpoint yet or UPWORK_IMPORT_KEY is not set on Render (deploy the latest version).';
+    return [false, 'Could not connect the Job Finder: ' . $why];
+}
+
 // ------------------------------------------------- 1) Upwork redirected back here
 if (isset($_GET['code']) || isset($_GET['error'])) {
     $state = (string)($_GET['state'] ?? '');
@@ -105,7 +131,7 @@ if (isset($_GET['code']) || isset($_GET['error'])) {
 
     if (!$mine) {
         // Not started from this page → probably the Job Finder's "Connect Upwork". Forward it.
-        $fwd = cfg('JOB_FINDER_CALLBACK');
+        $fwd = jf_base() !== '' ? jf_base() . '/auth/callback' : '';
         if ($fwd !== '') {
             $qs = $_SERVER['QUERY_STRING'] ?? '';
             header('Location: ' . $fwd . ($qs !== '' ? '?' . $qs : ''), true, 302);
@@ -124,7 +150,13 @@ if (isset($_GET['code']) || isset($_GET['error'])) {
             'grant_type' => 'authorization_code', 'code' => (string)$_GET['code'],
             'redirect_uri' => cfg('UPWORK_REDIRECT_URI'),
         ]);
-        flash('Success! Upwork returned your tokens.');
+        if (jf_ready()) {
+            [$ok, $msg] = send_to_job_finder($_SESSION['tokens']);
+            $_SESSION['sent'] = $ok;
+            flash($msg, !$ok);
+        } else {
+            flash('Success! Upwork returned your tokens.');
+        }
     } catch (Throwable $e) {
         flash($e->getMessage(), true);
     }
@@ -161,6 +193,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'redirect_uri' => cfg('UPWORK_REDIRECT_URI'), 'state' => $_SESSION['oauth_state'],
         ]));
     }
+    if ($action === 'send' && !empty($_SESSION['tokens'])) {
+        [$ok, $msg] = send_to_job_finder($_SESSION['tokens']);
+        $_SESSION['sent'] = $ok;
+        flash($msg, !$ok);
+        go(self_url());
+    }
     if ($action === 'refresh' && !empty($_SESSION['tokens']['refresh_token'])) {
         try {
             $_SESSION['tokens'] = token_request(['grant_type' => 'refresh_token',
@@ -184,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $testResult = ['ok' => false, 'error' => $msg];
         }
     }
-    if ($action === 'clear') { unset($_SESSION['tokens']); flash('Tokens removed from this session.'); go(self_url()); }
+    if ($action === 'clear') { unset($_SESSION['tokens'], $_SESSION['sent']); flash('Tokens removed from this session.'); go(self_url()); }
     if ($action === 'logout') { session_destroy(); go(self_url()); }
 }
 
@@ -218,7 +256,7 @@ ol{padding-left:20px;margin:6px 0}li{margin:4px 0}code{font-family:var(--mono);f
 
 <?php if ($adminPw === ''): ?>
   <div class="card"><h1>Upwork token helper</h1>
-    <p>This page is switched off. Set <code>ADMIN_PASSWORD</code> at the top of <code>index.php</code> to enable it.</p></div>
+    <p>This page is switched off. Set <code>ADMIN_PASSWORD</code> in <code>config.php</code> (next to index.php) to enable it.</p></div>
 
 <?php elseif (!$authed): ?>
   <div class="card" style="max-width:380px;margin:40px auto">
@@ -234,18 +272,21 @@ ol{padding-left:20px;margin:6px 0}li{margin:4px 0}code{font-family:var(--mono);f
       <form method="post"><input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="logout"><button class="btn ghost small">Sign out</button></form></div>
     <p class="muted">Get your first Upwork access token and refresh token using your API key.</p>
     <?php if (!$configured): ?>
-      <div class="warn-box">Set <code>UPWORK_CLIENT_ID</code> and <code>UPWORK_CLIENT_SECRET</code> at the top of this file first.</div>
+      <div class="warn-box">Set <code>UPWORK_CLIENT_ID</code> and <code>UPWORK_CLIENT_SECRET</code> in <code>config.php</code> first.</div>
     <?php else: ?>
       <p>Callback URL in use: <code><?= h(cfg('UPWORK_REDIRECT_URI')) ?></code><br>
         <span class="muted">It must match the callback URL on your Upwork key exactly.</span></p>
       <form method="post"><input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="start">
-        <button class="btn"><?= $t ? 'Get a new token' : 'Get token from Upwork' ?></button></form>
+        <button class="btn"><?= jf_ready() ? 'Connect Upwork to the Job Finder' : ($t ? 'Get a new token' : 'Get token from Upwork') ?></button></form>
+      <p class="muted" style="margin-top:10px">Job Finder: <?php if (jf_ready()): ?><code><?= h(jf_base()) ?></code> · tokens are sent there automatically<?php else: ?>not set (add JOB_FINDER_URL and JOB_FINDER_IMPORT_KEY to config.php to connect it automatically)<?php endif; ?></p>
     <?php endif; ?>
   </div>
 
   <?php if ($t): $expired = time() >= $t['expires_at']; ?>
   <div class="card">
-    <h2>Your tokens <?= $expired ? '<span class="pill warn">access token expired</span>' : '<span class="pill">active</span>' ?></h2>
+    <h2>Your tokens <?= $expired ? '<span class="pill warn">access token expired</span>' : '<span class="pill">active</span>' ?>
+      <?php if (!empty($_SESSION['sent'])): ?><span class="pill">sent to Job Finder ✓</span><?php endif; ?></h2>
+    <?php if (!empty($_SESSION['sent'])): ?><div class="warn-box" style="margin-bottom:10px">The Job Finder now owns these tokens and refreshes them itself. Don't click <b>Refresh now</b> here (it would invalidate the Job Finder's copy). Click <b>Clear</b> when done.</div><?php endif; ?>
     <p class="muted">Obtained <?= h(fmt_time($t['obtained_at'])) ?> · access token expires <?= h(fmt_time($t['expires_at'])) ?></p>
 
     <div class="tok"><label>Refresh token <span class="muted" style="font-weight:400">← put this in the Job Finder</span>
@@ -257,6 +298,7 @@ ol{padding-left:20px;margin:6px 0}li{margin:4px 0}code{font-family:var(--mono);f
     <div class="row" style="margin-top:6px">
       <form method="post" class="row" style="flex:1"><input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="test">
         <input name="q" value="<?= h($_POST['q'] ?? 'CRM') ?>" placeholder="Test search keyword"><button class="btn ghost">Test token</button></form>
+      <?php if (jf_ready()): ?><form method="post"><input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="send"><button class="btn">Send to Job Finder</button></form><?php endif; ?>
       <form method="post"><input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="refresh"><button class="btn ghost">Refresh now</button></form>
       <form method="post"><input type="hidden" name="csrf" value="<?= h($csrf) ?>"><input type="hidden" name="action" value="clear"><button class="btn ghost">Clear</button></form>
     </div>
@@ -273,6 +315,7 @@ ol{padding-left:20px;margin:6px 0}li{margin:4px 0}code{font-family:var(--mono);f
     <?php endif; ?>
   </div>
 
+  <?php if (!jf_ready()): ?>
   <div class="card">
     <h2>Use it in the Job Finder</h2>
     <ol>
@@ -282,6 +325,7 @@ ol{padding-left:20px;margin:6px 0}li{margin:4px 0}code{font-family:var(--mono);f
       <li>Click <b>Clear</b> here when done. Keep tokens private, they give read access to Upwork jobs on your account.</li>
     </ol>
   </div>
+  <?php endif; ?>
   <?php endif; ?>
 <?php endif; ?>
 
