@@ -108,3 +108,36 @@ form.inline { display: inline; }
   .search-row { flex-direction: column; }
 }
 .link-muted { color: var(--muted); font-size: 13px; }
+
+/* API scope page */
+.scope-hero h1 { margin-bottom: 8px; }
+.scope-hero p { max-width: 760px; }
+.scope-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.scope-summary > div { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; }
+.scope-summary .yes { background: var(--accent-soft); }
+.scope-summary .no { background: var(--warn-soft); }
+.scope-summary .big { font-size: 20px; font-weight: 700; line-height: 1.2; }
+.scope-summary .yes .big { color: var(--accent); } .scope-summary .no .big { color: var(--warn); }
+.table-wrap { overflow-x: auto; }
+.scope-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; }
+.scope-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.scope-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.scope-table tr:last-child td { border-bottom: 0; }
+.scope-table td:first-child { width: 22%; } .scope-table td:last-child { width: 18%; }
+.scope-table .pill { margin-bottom: 4px; }
+.note { color: var(--muted); font-size: 13px; background: var(--bg); padding: 10px 12px; border-radius: 8px; margin: 12px 0 0; }
+.note.small { background: none; padding: 0 4px; }
+.layout-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.checks, .crosses { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.checks li, .crosses li { padding-left: 26px; position: relative; }
+.checks li::before { content: "✓"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+.crosses li::before { content: "✕"; position: absolute; left: 4px; color: var(--warn); font-weight: 700; }
+.checks .tag { font-size: 11px; margin-left: 4px; }
+.flow { padding-left: 20px; margin: 0; display: grid; gap: 8px; }
+.status-line { margin: 14px 0 0; }
+@media (max-width: 860px) { .scope-summary, .layout-2 { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .topbar { gap: 10px; padding: 10px 16px; }
+  .topbar nav { order: 3; width: 100%; overflow-x: auto; }
+  .topbar nav a { white-space: nowrap; }
+}

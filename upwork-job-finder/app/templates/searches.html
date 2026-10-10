@@ -8,7 +8,10 @@
     <span class="pill {{ 'ok' if email_on else 'muted' }}">Email {{ 'on' if email_on else 'off' }}</span>
     <span class="pill {{ 'ok' if telegram_on else 'muted' }}">Telegram {{ 'on' if telegram_on else 'off' }}</span>
     and always appear as <b>New</b> on the dashboard.</p>
-  <form method="post" action="/searches/run-all"><button class="btn ghost">Run all alerts now</button></form>
+  <div class="row-actions">
+    <form method="post" action="/searches/run-all"><button class="btn ghost">Run all alerts now</button></form>
+    <a class="btn ghost" href="/api-scope">Know API key scope</a>
+  </div>
 </section>
 
 <section class="layout">

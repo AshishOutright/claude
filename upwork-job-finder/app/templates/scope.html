@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Know API key scope · Job Finder{% endblock %}
+{% block content %}
+<section class="card scope-hero">
+  <h1>Know your Upwork API key scope</h1>
+  <p>Your key is <b>read-only for job postings</b>. It can find and read jobs, which is everything this app needs to search,
+    score and alert. It <b>cannot act on Upwork for you</b>: no submitting proposals, no messaging clients, no reading your
+    profile, contracts or earnings.</p>
+  <div class="scope-summary">
+    <div class="yes"><span class="big">✓</span><div><b>Can do</b><br>Search jobs · read full job details · read jobs your company posted as a client</div></div>
+    <div class="no"><span class="big">✕</span><div><b>Cannot do</b><br>Apply / send proposals · message clients · read freelancer profile, contracts, earnings or Connects</div></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>The four permissions on your key</h2>
+  <div class="table-wrap">
+  <table class="scope-table">
+    <thead><tr><th>Permission (as shown on Upwork)</th><th>What it unlocks</th><th>What you can achieve</th><th>In this app</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Read marketplace Job Postings</b> for public user</td>
+        <td>Marketplace job search and job-by-ID lookups (GraphQL <code>marketplaceJobPostingsSearch</code>, <code>marketplaceJobPosting</code>, <code>marketplaceJobPostingsContents</code>)</td>
+        <td>Search all open jobs by keyword, sort by newest, page through results; get title, description, budget or hourly range, skills, experience level and client stats (country, hires, spend, payment verified)</td>
+        <td><span class="pill ok">Used</span> Search, saved searches, alerts, match scores</td>
+      </tr>
+      <tr>
+        <td><b>Read public marketplace Job Postings</b> for public user</td>
+        <td>The public job feed, the same jobs a logged-out visitor can see on upwork.com</td>
+        <td>A fallback or lighter search with fewer client details; useful for broad market research such as which skills are in demand and typical budgets</td>
+        <td><span class="pill muted">Available</span> Not needed today</td>
+      </tr>
+      <tr>
+        <td><b>Read-only access to job details entities</b></td>
+        <td>The full detail record of a single job</td>
+        <td>Open one job and read its complete record, with more fields than search results return (for example the full description and job requirements)</td>
+        <td><span class="pill muted">Available</span> Could enrich the job page and proposal drafts</td>
+      </tr>
+      <tr>
+        <td><b>Read-only access to job postings</b> from client point of view</td>
+        <td>Jobs <i>your own organization posted</i> as a client (GraphQL <code>jobPosting</code>)</td>
+        <td>Only useful if you also hire on Upwork: check status and details of jobs you posted. Does not help find work.</td>
+        <td><span class="pill muted">Not used</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Upwork's API docs also say the <b>"Common Entities – Read-Only Access"</b> scope is required for all calls.
+    It isn't in your screenshot. If searches fail with a permission error after you connect, open your key at
+    <a href="https://www.upwork.com/developer/keys" target="_blank" rel="noopener">upwork.com/developer/keys</a>, add that scope, then reconnect here.</p>
+</section>
+
+<section class="layout-2">
+  <div class="card">
+    <h2>What you can build with this key</h2>
+    <ul class="checks">
+      <li><b>Job radar.</b> Saved searches that run on a schedule and alert you to new matches by email or Telegram. <span class="tag">in this app</span></li>
+      <li><b>Fit scoring.</b> Rank jobs by keyword match, budget, client quality and freshness. <span class="tag">in this app</span></li>
+      <li><b>Client vetting.</b> Skip unverified or zero-hire clients automatically. <span class="tag">in this app</span></li>
+      <li><b>Proposal drafting.</b> Claude writes a draft from the job text, and you paste it into Upwork yourself. <span class="tag">in this app</span></li>
+      <li><b>Market research.</b> Track demand for skills (e.g. SuiteCRM vs Salesforce), average budgets and hourly rates over time.</li>
+      <li><b>Lead sheet.</b> Export matched jobs to your CRM or a spreadsheet for your team to follow up.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>What needs a different scope</h2>
+    <ul class="crosses">
+      <li><b>Submitting proposals or applying.</b> Upwork offers proposal APIs, but they need extra scopes that Upwork rarely grants. Apply on upwork.com.</li>
+      <li><b>Messaging clients</b> and reading chat rooms.</li>
+      <li><b>Your freelancer profile</b>, stats, Job Success Score or Connects balance.</li>
+      <li><b>Contracts, time logs, earnings and invoices.</b></li>
+      <li><b>Client contact details.</b> Upwork never exposes emails or phone numbers.</li>
+    </ul>
+    <p class="note">To get more access, edit your key at
+      <a href="https://www.upwork.com/developer/keys" target="_blank" rel="noopener">upwork.com/developer/keys</a> and request the extra
+      scopes. Upwork reviews each request by hand.</p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>How this app uses your key</h2>
+  <ol class="flow">
+    <li><b>Connect Upwork</b> sends you to Upwork to approve read-only access. The app gets a token, never your password.</li>
+    <li>Searches call Upwork's GraphQL API with that token. Results are stored in this app's own database.</li>
+    <li>Your Client ID and Secret stay in the server's environment settings and are never shown in the browser.</li>
+    <li><b>Disconnect</b> deletes the stored token. You can also revoke access anytime in your Upwork account settings.</li>
+  </ol>
+  <p class="status-line">Current status:
+    {% if demo %}<span class="pill warn">Demo mode, no key set</span>
+    {% elif connected %}<span class="pill ok">Key connected</span>
+    {% else %}<span class="pill muted">Key set, not connected yet</span>{% endif %}
+  </p>
+</section>
+<p class="note small">Scope names and the queries they allow are from Upwork's GraphQL API documentation, checked October 2026. Upwork can change them.</p>
+{% endblock %}

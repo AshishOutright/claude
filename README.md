@@ -4,7 +4,7 @@ A collection of small apps built and maintained with Claude. Each folder is a se
 
 | Project | What it does | Port |
 |---|---|---|
-| [upwork-job-finder](upwork-job-finder/) | Search Upwork jobs, score matches, get alerts, draft proposals with Claude | 8001 |
+| [upwork-job-finder](upwork-job-finder/) | Search Upwork jobs, score matches, get alerts, draft proposals with Claude. See its **Know API key scope** page at `/api-scope` | 8001 |
 | [claude-code-center](claude-code-center/) | Personal coding chat app on the Claude API with saved history | 8002 |
 
 ## Requirements

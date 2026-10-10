@@ -14,6 +14,7 @@
   <nav>
     <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a>
     <a href="/searches" class="{% if request.url.path.startswith('/searches') %}active{% endif %}">Searches &amp; alerts</a>
+    <a href="/api-scope" class="{% if request.url.path == '/api-scope' %}active{% endif %}">Know API key scope</a>
   </nav>
   <div class="conn">
     {% if demo %}

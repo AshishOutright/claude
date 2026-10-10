@@ -123,6 +123,12 @@ def quick_search(query: str = Form(...), job_type: str = Form(""), min_budget: s
     return redirect("/", f"Found {len(matches)} jobs ({len(new)} new).{note}")
 
 
+@app.get("/api-scope", response_class=HTMLResponse)
+def api_scope(request: Request):
+    """'Know API key scope' page: what the Upwork key's permissions allow."""
+    return templates.TemplateResponse(request, "scope.html", ctx(request))
+
+
 @app.get("/api/stats")
 def api_stats():
     return JSONResponse(db.stats())

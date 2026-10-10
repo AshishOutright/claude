@@ -22,6 +22,12 @@ cd upwork-job-finder
 
 Open <http://localhost:8001>. The first run creates `.env` from `.env.example`; without Upwork keys it starts in demo mode.
 
+## Know API key scope
+
+The app has a **[Know API key scope](/api-scope)** page (top menu, at `/api-scope` on your deployed app). It explains what your
+Upwork key's permissions allow: searching jobs and reading job details. It also covers what they don't allow: applying,
+messaging, or reading your profile, contracts or earnings. The page can be opened without the app password, so you can share it.
+
 ## Connecting your Upwork API key
 
 1. Request a key at <https://www.upwork.com/developer/keys/apply> (Upwork reviews these manually; it can take a few days).
