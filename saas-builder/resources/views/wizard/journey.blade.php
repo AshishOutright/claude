@@ -2,6 +2,7 @@
 
 @section('step')
     <h2 style="margin-top:0">Phases, stages and statuses</h2>
+    @if ($app->journeyModule())<p class="hint">Records in <strong>{{ $app->journeyModule()->name }}</strong> move through this journey.</p>@endif
     <p class="hint">One line per phase. Under it, one line per stage: <code>- Stage: Status, Status, Final*</code>. A <code>*</code> marks a final status; every stage needs one so records can move on.</p>
 
     <div class="grid2">

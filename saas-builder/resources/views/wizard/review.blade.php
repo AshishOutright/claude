@@ -10,6 +10,8 @@
             <dd>{{ $app->constitutions->map(fn ($c) => $c->code.' '.$c->title)->implode("\n") ?: 'None chosen' }}</dd>
             <dt>Laws ({{ $app->laws->count() }}, {{ $app->laws->where('checked_by_core', true)->count() }} checked automatically)</dt>
             <dd>{{ $app->laws->map(fn ($l) => $l->code.' '.$l->title)->implode("\n") ?: 'None chosen' }}</dd>
+            <dt>CRM modules ({{ $app->modules->count() }})</dt>
+            <dd>{{ $app->modules->map(fn ($m) => $m->name.($m->is_journey ? ' (journey)' : '').': '.$m->fields->pluck('label')->implode(', '))->implode("\n") }}</dd>
             <dt>Journey</dt>
             <dd>
                 <div class="journey-preview">
@@ -35,14 +37,17 @@
 
         <form method="post" action="{{ route('apps.generate', $app) }}" class="actions">
             @csrf
-            <button class="btn">Generate starter app (.zip)</button>
+            <button class="btn">Generate the app (.zip)</button>
             @if ($app->generated_at)<span class="hint">Last generated {{ $app->generated_at->diffForHumans() }}</span>@endif
         </form>
     </div>
 
     <div class="panel" style="margin-top:16px">
-        <h2 style="margin-top:0">What the starter app contains ({{ $files->count() }} files)</h2>
-        <p class="hint">Runs on Smart Core: unzip, then <code>./install.sh {{ $app->slug }} /path/to/claude/smart-core</code>.</p>
+        <h2 style="margin-top:0">What you get ({{ $files->count() }} files, plus Smart Core)</h2>
+        <p class="hint">
+            <strong>crm/</strong> goes into your SuiteCRM copy (<code>./install-crm.sh /path/to/suitecrm</code>), including the Smart Gateway at
+            <code>index.php?entryPoint=smart_gateway</code>. <strong>frontend/</strong> is the React app, which talks only to the gateway.
+        </p>
         <ul class="files">
             @foreach ($files as $file)<li>{{ $file }}</li>@endforeach
         </ul>

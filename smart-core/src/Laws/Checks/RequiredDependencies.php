@@ -19,6 +19,6 @@ class RequiredDependencies implements Law
 
     public function check(string $basePath): LawResult
     {
-        return LawResult::runtime('Models list their dependencies in $requires and use SmartCore\\Laws\\RequiresDependencies, which blocks the save.');
+        return LawResult::runtime('The Smart Gateway rejects a create or update when a required related record is missing.');
     }
 }

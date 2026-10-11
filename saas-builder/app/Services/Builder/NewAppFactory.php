@@ -9,11 +9,11 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Creates a new app pre-filled from the playbook: core constitutions and laws ticked,
- * every ACFCM item ticked, and the journey from the chosen template.
+ * every ACFCM item ticked, and the modules and journey from the chosen template.
  */
 class NewAppFactory
 {
-    public function __construct(private readonly JourneyOutline $outline)
+    public function __construct(private readonly JourneyOutline $outline, private readonly ModuleOutline $modules)
     {
     }
 
@@ -32,6 +32,7 @@ class NewAppFactory
             }
 
             $template = config("playbook.templates.{$app->template}") ?? config('playbook.templates.blank');
+            $this->modules->save($app, $template['modules']);
             $this->outline->save($app, $template['journey']);
 
             return $app;

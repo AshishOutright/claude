@@ -1,9 +1,10 @@
 <?php
 
-namespace SmartCore\Console;
+namespace SmartCore\Laravel;
 
 use Illuminate\Console\Command;
 use SmartCore\Laws\LawRegistry;
+use SmartCore\Laws\LawRunner;
 
 class CheckLaws extends Command
 {
@@ -13,18 +14,16 @@ class CheckLaws extends Command
 
     public function handle(LawRegistry $registry): int
     {
-        $failed = false;
-        $rows = [];
+        $results = (new LawRunner($registry))->run(base_path());
 
-        foreach ($registry->laws() as $law) {
-            $result = $law->check(base_path());
-            $failed = $failed || $result->failed();
-            $rows[] = [$law->code(), $law->title(), strtoupper($result->status), implode("\n", $result->messages)];
-        }
+        $this->table(['Law', 'Title', 'Result', 'Details'], array_map(fn ($row) => [
+            $row['law']->code(),
+            $row['law']->title(),
+            strtoupper($row['result']->status),
+            implode("\n", $row['result']->messages),
+        ], $results));
 
-        $this->table(['Law', 'Title', 'Result', 'Details'], $rows);
-
-        if ($failed) {
+        if (LawRunner::failed($results)) {
             $this->error('A law is broken. Fix it before merging.');
 
             return self::FAILURE;

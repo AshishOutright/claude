@@ -6,6 +6,7 @@ use App\Models\Constitution;
 use App\Models\Law;
 use App\Models\SaasApp;
 use App\Services\Builder\JourneyOutline;
+use App\Services\Builder\ModuleOutline;
 use App\Services\Builder\StarterAppGenerator;
 use App\Services\Builder\WizardSteps;
 use Illuminate\Http\RedirectResponse;
@@ -17,10 +18,10 @@ use InvalidArgumentException;
 
 class WizardController extends Controller
 {
-    public function show(SaasApp $app, string $step, JourneyOutline $outline, StarterAppGenerator $generator): View
+    public function show(SaasApp $app, string $step, JourneyOutline $outline, ModuleOutline $modules, StarterAppGenerator $generator): View
     {
         abort_unless(WizardSteps::exists($step), 404);
-        $app->load(['constitutions', 'laws', 'acfcmChoices', 'phases.stages.statuses']);
+        $app->load(['constitutions', 'laws', 'acfcmChoices', 'phases.stages.statuses', 'modules.fields']);
 
         return view("wizard.{$step}", [
             'app' => $app,
@@ -31,11 +32,12 @@ class WizardController extends Controller
             'acfcm' => config('playbook.acfcm'),
             'templates' => config('playbook.templates'),
             'outline' => old('outline', $outline->format($app)),
+            'modulesOutline' => old('modules', $modules->format($app)),
             'files' => $step === 'review' ? $generator->listFiles($app) : collect(),
         ]);
     }
 
-    public function update(Request $request, SaasApp $app, string $step, JourneyOutline $outline): RedirectResponse
+    public function update(Request $request, SaasApp $app, string $step, JourneyOutline $outline, ModuleOutline $modules): RedirectResponse
     {
         abort_unless(WizardSteps::exists($step) && $step !== 'review', 404);
 
@@ -44,6 +46,7 @@ class WizardController extends Controller
             'constitutions' => $this->saveConstitutions($request, $app),
             'laws' => $this->saveLaws($request, $app),
             'vision' => $this->saveVision($request, $app),
+            'modules' => $this->saveModules($request, $app, $modules),
             'journey' => $this->saveJourney($request, $app, $outline),
             'acfcm' => $this->saveAcfcm($request, $app),
         };
@@ -119,6 +122,17 @@ class WizardController extends Controller
             'vision_before' => 'nullable|string|max:2000',
             'vision_after' => 'nullable|string|max:2000',
         ]));
+    }
+
+    private function saveModules(Request $request, SaasApp $app, ModuleOutline $modules): void
+    {
+        $request->validate(['modules' => 'required|string|max:20000']);
+
+        try {
+            $modules->save($app, $request->input('modules'));
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['modules' => explode("\n", $e->getMessage())]);
+        }
     }
 
     private function saveJourney(Request $request, SaasApp $app, JourneyOutline $outline): void

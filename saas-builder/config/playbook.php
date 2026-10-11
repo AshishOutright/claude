@@ -83,14 +83,20 @@ return [
         ],
     ],
 
-    // Starting journeys. One line per phase, "- Stage: Status, Status*" under it; * marks a final status.
+    // Starting points. Modules: one CRM module per line, * marks the journey module, ! a required field.
+    // Journey: one line per phase, "- Stage: Status, Status*" under it; * marks a final status.
     'templates' => [
         'blank' => [
             'label' => 'Blank',
+            'modules' => "Records*: notes:text\n",
             'journey' => "Start\n- New: Open, Done*\n",
         ],
         'hr-crm' => [
             'label' => 'HR CRM (HRC)',
+            'modules' => <<<'TXT'
+Employees*: email:email!, phone:phone, joining_date:date, source:enum(Referral|Job Board|Website|Agency), department:relate(Departments)!
+Departments: code
+TXT,
             'journey' => <<<'TXT'
 Onboarding
 - Application: New, Screening, Shortlisted, Rejected*
@@ -109,6 +115,10 @@ TXT,
         ],
         'task-crm' => [
             'label' => 'Task CRM (TRC)',
+            'modules' => <<<'TXT'
+Tasks*: due_date:date, priority:enum(Low|Medium|High), estimate_hours:decimal, client:relate(Clients)!
+Clients: email:email, phone:phone
+TXT,
             'journey' => <<<'TXT'
 Plan
 - Intake: New, Needs Info, Accepted*, Rejected*
@@ -123,6 +133,10 @@ TXT,
         ],
         'social-crm' => [
             'label' => 'Social CRM (SRC)',
+            'modules' => <<<'TXT'
+Posts*: body:text!, publish_at:datetime, social_account:relate(Social Accounts)!
+Social Accounts: network:enum(Facebook|Instagram|LinkedIn|X|TikTok)!, handle
+TXT,
             'journey' => <<<'TXT'
 Connect
 - Accounts: Not Connected, Pending Review, Connected*

@@ -2554,7 +2554,7 @@
             "dist": {
                 "type": "path",
                 "url": "../smart-core",
-                "reference": "1d39289317880b67cc43dc79800bbd62cc01da48"
+                "reference": "cf9718b8c824e4f8fb1fb899acf731aac693ac92"
             },
             "require": {
                 "illuminate/console": "^12.0|^13.0",
@@ -2565,7 +2565,7 @@
             "extra": {
                 "laravel": {
                     "providers": [
-                        "SmartCore\\SmartCoreServiceProvider"
+                        "SmartCore\\Laravel\\SmartCoreServiceProvider"
                     ]
                 }
             },

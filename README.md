@@ -7,8 +7,8 @@ A collection of small apps built and maintained with Claude. Each folder is a se
 | [upwork-job-finder](upwork-job-finder/) | Search Upwork jobs, score matches, get alerts, draft proposals with Claude. See its **Know API key scope** page at `/api-scope` | 8001 |
 | [claude-code-center](claude-code-center/) | Personal coding chat app on the Claude API with saved history | 8002 |
 | [tools/upwork-token-php](tools/upwork-token-php/) | PHP page for your website that gets your first Upwork access/refresh token | — |
-| [saas-builder](saas-builder/) | Wizard that starts a new SaaS app from the base constitutions, laws, vision, phases and ACFCM, and generates a starter app (PHP 8.3, Laravel) | 8000 |
-| [smart-core](smart-core/) | Shared base the generated apps run on: phase / stage / status classes and laws checked in code | — |
+| [saas-builder](saas-builder/) | Wizard that starts a new SaaS app from the base constitutions, laws, vision, modules, phases and ACFCM, and generates its CRM modules, Smart Gateway and React app | 8000 |
+| [smart-core](smart-core/) | Shared base the generated apps run on: the Smart Gateway engine, phase / stage / status classes and laws checked in code | — |
 
 ## Requirements
 

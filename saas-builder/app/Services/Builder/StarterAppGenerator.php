@@ -9,66 +9,63 @@ use RuntimeException;
 use ZipArchive;
 
 /**
- * Builds the starter app for a finished wizard: an overlay for a fresh Laravel install that
- * runs on the Smart Core package, plus the docs and CLAUDE.md agents build against.
+ * Builds the starter app for a finished wizard, in the three parts every app has:
+ *
+ *  - crm/       the CRM copy's modules (SuiteCRM), copied into the CRM's root
+ *  - crm/custom/smart_gateway/   the Smart Gateway entry point, running on Smart Core
+ *  - frontend/  the React app, which reads and writes CRM data only through the Smart Gateway
+ *
+ * plus the docs and CLAUDE.md agents build against, the laws check and CI.
  */
 class StarterAppGenerator
 {
+    private const GATEWAY = 'crm/custom/smart_gateway';
+
+    public function __construct(private readonly SuiteCrmModuleWriter $crm)
+    {
+    }
+
     /** @return array<string, string> relative path => file contents */
     public function files(SaasApp $app): array
     {
-        $app->loadMissing(['constitutions', 'laws', 'phases.stages.statuses', 'acfcmChoices']);
+        $app->loadMissing(['constitutions', 'laws', 'phases.stages.statuses', 'acfcmChoices', 'modules.fields']);
 
         $files = [
-            'install.sh' => $this->installScript($app),
-            'app-files/CLAUDE.md' => $this->claudeMd($app),
-            'app-files/docs/CONSTITUTION.md' => $this->constitutionMd($app),
-            'app-files/docs/LAWS.md' => $this->lawsMd($app),
-            'app-files/docs/VISION.md' => $this->visionMd($app),
-            'app-files/docs/JOURNEY.md' => $this->journeyMd($app),
-            'app-files/config/workflow.php' => $this->workflowConfig($app),
-            'app-files/config/laws.php' => $this->lawsConfig($app),
-            'app-files/config/acfcm.php' => $this->acfcmConfig($app),
-            'app-files/app/Workflow/SelectPhase.php' => $this->selectorClass('SelectPhase', 'select_phase: which phase a record is in and which comes next.'),
-            'app-files/app/Workflow/SelectStage.php' => $this->selectorClass('SelectStage', 'select_stage: finds stages, moves records forward and guards status changes.'),
-            'app-files/database/migrations/2026_01_01_000000_create_journey_entries_table.php' => $this->journeyMigration(),
-            'app-files/app/Models/JourneyEntry.php' => $this->journeyModel(),
-            'app-files/app/Services/Journey.php' => $this->journeyService($app),
-            'app-files/app/Http/Controllers/JourneyController.php' => $this->journeyController(),
-            'app-files/resources/views/journey/index.blade.php' => $this->journeyView($app),
-            'app-files/routes/web.php' => $this->routes(),
-            'app-files/tests/Feature/LawsTest.php' => $this->lawsTest(),
-            'app-files/tests/Feature/JourneyTest.php' => $this->journeyTest($app),
-            'app-files/.github/workflows/laws.yml' => $this->ciWorkflow(),
+            'CLAUDE.md' => $this->claudeMd($app),
+            'docs/CONSTITUTION.md' => $this->constitutionMd($app),
+            'docs/LAWS.md' => $this->lawsMd($app),
+            'docs/VISION.md' => $this->visionMd($app),
+            'docs/JOURNEY.md' => $this->journeyMd($app),
+            'docs/MODULES.md' => $this->modulesMd($app),
+            'docs/SMART_GATEWAY.md' => $this->gatewayMd($app),
+            'install-crm.sh' => $this->installScript($app),
+            '.gitignore' => "node_modules/\ndist/\n.env\n.env.*\n!.env.example\ntests/dev-data.json\n",
+            '.github/workflows/laws.yml' => $this->ciWorkflow(),
+            self::GATEWAY.'/config.php' => $this->gatewayConfig($app),
+            self::GATEWAY.'/CORE_VERSION' => 'Copied from smart-core on '.now()->toDateString()." by the SaaS Builder. Update by regenerating or copying smart-core/src again.\n",
         ];
 
+        foreach ($this->crm->files($app) as $path => $contents) {
+            $files['crm/'.$path] = $contents;
+        }
+
+        foreach ($this->stubs($app) as $path => $contents) {
+            $files[$path] = $contents;
+        }
+
+        foreach ($this->coreFiles() as $path => $contents) {
+            $files[self::GATEWAY.'/core/'.$path] = $contents;
+        }
+
         foreach ($app->phases as $phase) {
-            $files['app-files/app/Workflow/Phases/'.Naming::className($phase->name).'Phase.php'] = $this->phaseClass($phase);
+            $files[self::GATEWAY.'/app/Workflow/Phases/'.Naming::className($phase->name).'Phase.php'] = $this->phaseClass($phase);
 
             foreach ($phase->stages as $stage) {
-                $path = 'app-files/app/Workflow/Stages/'.Naming::className($phase->name).'/'.Naming::className($stage->name).'Stage.php';
-                $files[$path] = $this->stageClass($phase, $stage);
+                $files[self::GATEWAY.'/app/Workflow/Stages/'.Naming::className($phase->name).'/'.Naming::className($stage->name).'Stage.php'] = $this->stageClass($phase, $stage);
             }
         }
 
-        if ($app->hasAcfcm('journey_events')) {
-            $files['app-files/app/Events/JourneyMoved.php'] = $this->journeyEvent();
-        }
-
-        if ($app->hasAcfcm('feature_toggles') || $app->hasAcfcm('plan_limits')) {
-            $files['app-files/app/Support/Features.php'] = $this->featuresClass();
-        }
-
-        if ($app->hasAcfcm('aisuites_client')) {
-            $files['app-files/config/aisuites.php'] = $this->aisuitesConfig();
-            $files['app-files/app/Services/Ai/AiSuites.php'] = $this->aisuitesClient($app);
-        }
-
-        if ($app->hasAcfcm('ai_feedback_log')) {
-            $files['app-files/database/migrations/2026_01_01_000001_create_ai_feedback_table.php'] = $this->aiFeedbackMigration();
-        }
-
-        $files['README.md'] = $this->readme($app, count($files) - 1);
+        $files['README.md'] = $this->readme($app, count($files));
         ksort($files);
 
         return $files;
@@ -79,7 +76,7 @@ class StarterAppGenerator
      */
     public function build(SaasApp $app): string
     {
-        $root = storage_path('app/generated/'.$app->slug.'-starter');
+        $root = storage_path('app/generated/'.$app->slug);
         File::deleteDirectory($root);
 
         foreach ($this->files($app) as $path => $contents) {
@@ -87,9 +84,9 @@ class StarterAppGenerator
             File::put($root.'/'.$path, $contents);
         }
 
-        chmod($root.'/install.sh', 0755);
+        chmod($root.'/install-crm.sh', 0755);
 
-        $zipPath = storage_path('app/generated/'.$app->slug.'-starter.zip');
+        $zipPath = storage_path('app/generated/'.$app->slug.'.zip');
         $zip = new ZipArchive();
 
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -97,10 +94,10 @@ class StarterAppGenerator
         }
 
         foreach (File::allFiles($root, true) as $file) {
-            $name = $app->slug.'-starter/'.$file->getRelativePathname();
+            $name = $app->slug.'/'.$file->getRelativePathname();
             $zip->addFile($file->getPathname(), $name);
 
-            if ($file->getFilename() === 'install.sh') {
+            if (str_ends_with($name, '.sh')) {
                 $zip->setExternalAttributesName($name, ZipArchive::OPSYS_UNIX, 0100755 << 16);
             }
         }
@@ -111,41 +108,112 @@ class StarterAppGenerator
         return $zipPath;
     }
 
+    /** @return Collection<int, string> */
+    public function listFiles(SaasApp $app): Collection
+    {
+        return collect(array_keys($this->files($app)))->reject(fn ($p) => str_starts_with($p, self::GATEWAY.'/core/'))->values();
+    }
+
+    // ---- Static parts: React app, gateway entry, laws check, smoke test ----
+
+    /** @return array<string, string> */
+    private function stubs(SaasApp $app): array
+    {
+        $root = resource_path('starter');
+        $files = [];
+
+        foreach (File::allFiles($root, true) as $file) {
+            $files[str_replace('\\', '/', $file->getRelativePathname())] = strtr($file->getContents(), [
+                '__APP_NAME__' => $app->name,
+                '__APP_SLUG__' => $app->slug,
+            ]);
+        }
+
+        return $files;
+    }
+
+    /** Smart Core's framework-free parts, so the gateway runs inside the CRM without Composer. */
+    private function coreFiles(): array
+    {
+        $src = rtrim(config('builder.smart_core_path'), '/').'/src';
+
+        if (! is_dir($src)) {
+            throw new RuntimeException("Smart Core was not found at {$src}. Set SMART_CORE_PATH.");
+        }
+
+        $files = [];
+
+        foreach (['Workflow', 'Laws', 'Gateway'] as $dir) {
+            foreach (File::allFiles($src.'/'.$dir) as $file) {
+                $files[$dir.'/'.str_replace('\\', '/', $file->getRelativePathname())] = $file->getContents();
+            }
+        }
+
+        return $files;
+    }
+
     // ---- Docs ------------------------------------------------------------
 
     private function readme(SaasApp $app, int $files): string
     {
         $summary = $app->summary ? "\n{$app->summary}\n" : '';
+        $prefix = $app->crmPrefix();
+        $modules = $app->modules->map(fn ($m) => "`{$m->crmKey($prefix)}`")->implode(', ');
 
         return <<<MD
-# {$app->name} starter
+# {$app->name}
 {$summary}
-Generated by the SaaS Builder on {$this->today()}. It holds {$files} files that sit on top of a fresh Laravel app and
-the Smart Core package, so the journey, laws and ACFCM settings below are already in code on day one.
+Generated by the SaaS Builder on {$this->today()} ({$files} files). Every app has three parts:
 
-## Install
+| Part | Folder | What it is |
+|---|---|---|
+| CRM | `crm/` | The modules this app stores ({$modules}), copied into your SuiteCRM copy |
+| Smart Gateway | `crm/custom/smart_gateway/` | The one endpoint for all data: `index.php?entryPoint=smart_gateway` |
+| React app | `frontend/` | The screens people use; they talk only to the Smart Gateway |
 
-Needs PHP 8.3, Composer and a checkout of the Smart Core (`smart-core/` in the AshishOutright/claude repo).
+## 1. Install into the CRM copy
 
 ```bash
-./install.sh {$app->slug} /path/to/claude/smart-core
-cd {$app->slug}
-php artisan migrate
-php artisan laws:check
-php artisan test
+./install-crm.sh /path/to/your/suitecrm
 ```
 
-`install.sh` creates the Laravel app, copies `app-files/` over it and installs Smart Core. Set your MySQL details in
-`.env` before `migrate`.
+Then in the CRM: **Admin → Repair → Quick Repair and Rebuild**, and run the SQL it shows to create the tables.
+Add the gateway settings to `config_override.php` (the script prints a fresh secret):
 
-## What is inside
+```php
+\$sugar_config['smart_gateway'] = [
+    'secret' => '<64 random characters>',
+    'allowed_origins' => ['http://localhost:5173', 'https://app.example.com'],
+    'requests_per_minute' => 120,
+];
+```
 
-- `CLAUDE.md`: the brief every Claude Code agent reads before building (vision, constitution, laws, journey, ACFCM).
-- `docs/`: the constitution, laws, vision and journey for the team.
-- `app/Workflow/`: one class per phase and per stage, plus `SelectPhase` and `SelectStage`.
-- `config/workflow.php`, `config/laws.php`, `config/acfcm.php`: the journey, the laws `laws:check` enforces, and the ACFCM switches.
-- `/journey`: a starter screen listing journey entries, built with the core list view.
-- `.github/workflows/laws.yml`: CI that fails a pull request when a law breaks.
+## 2. Run the React app
+
+```bash
+cd frontend
+cp .env.example .env      # set VITE_SG_URL to your CRM's smart_gateway link
+npm install
+npm run dev
+```
+
+Log in with a CRM username and password.
+
+No CRM yet? Run a local gateway that keeps records in a JSON file, set `VITE_SG_URL=http://localhost:8080`, and log
+in as `dev` / `dev`:
+
+```bash
+php -S localhost:8080 tests/dev-gateway.php
+```
+
+## 3. Check the laws
+
+```bash
+php bin/laws-check.php        # fails when a checked law is broken
+php tests/gateway-smoke.php   # runs the gateway against an in-memory store
+```
+
+CI (`.github/workflows/laws.yml`) runs both and builds the React app on every pull request.
 
 MD;
     }
@@ -153,20 +221,28 @@ MD;
     private function claudeMd(SaasApp $app): string
     {
         $constitution = $app->constitutions->map(fn ($c) => "- **{$c->code} {$c->title}.** {$c->reason}")->implode("\n");
-        $laws = $app->laws->map(fn ($l) => "- **{$l->code}** {$l->title}".($l->checked_by_core ? ' _(checked by `laws:check`)_' : ''))->implode("\n");
-        $acfcm = $this->acfcmLines($app);
+        $laws = $app->laws->map(fn ($l) => "- **{$l->code}** {$l->title}".($l->checked_by_core ? ' _(checked by `bin/laws-check.php`)_' : ''))->implode("\n");
 
         return <<<MD
 # {$app->name}: brief for agents
 
-Read this before writing code. It is generated from the SaaS Builder; change it there and regenerate, or edit it
-here and keep `docs/` in sync.
+Read this before writing code. It is generated by the SaaS Builder; change it there and regenerate, or edit it here
+and keep `docs/` in sync.
 
 ## Vision for the team
 
 {$this->orDash($app->team_vision)}
 
 Full Core Vision: `docs/VISION.md`.
+
+## How this app is built
+
+1. **CRM copy** (`crm/`): SuiteCRM stores the modules in `docs/MODULES.md`. Each is a real module with its own table.
+2. **Smart Gateway** (`crm/custom/smart_gateway/`): the one endpoint for all data. Actions and request format: `docs/SMART_GATEWAY.md`.
+3. **React app** (`frontend/`): screens built from the gateway's `meta` action. It never talks to the CRM any other way.
+
+Shared logic lives in Smart Core (`crm/custom/smart_gateway/core/`, copied from the `smart-core` folder of the builder
+repo). Fix shared logic there, not in this app.
 
 ## Constitution
 
@@ -176,25 +252,28 @@ Full Core Vision: `docs/VISION.md`.
 
 {$laws}
 
-Run `php artisan laws:check` before every commit. A failing law blocks the merge in CI.
+Run `php bin/laws-check.php` before every commit. A failing law blocks the merge in CI.
 
 ## Journey (phase, stage, status)
 
+Records in **{$app->journeyModule()?->name}** move through:
+
 {$this->journeyBullets($app)}
 
-The journey lives in `config/workflow.php` and `app/Workflow/`. Never hard-code a phase, stage or status string in
-a controller: go through `App\Workflow\SelectPhase`, `App\Workflow\SelectStage` and `App\Services\Journey`.
+Phases and stages are classes in `crm/custom/smart_gateway/app/Workflow/`. Status changes go through the gateway's
+`move` and `advance` actions, which use `SelectPhase` and `SelectStage`; never write `journey_*` fields directly.
 
 ## ACFCM
 
-{$acfcm}
+{$this->acfcmLines($app)}
 
-## How to build here
+## Rules for code here
 
-- PHP 8.3, Laravel, MySQL. All code in classes and methods; routes point at controllers.
-- Extend the Smart Core (`outright/smart-core`) instead of copying what it already does.
-- List screens use `<x-smartcore::list-view>`. Models that depend on another record use `SmartCore\Laws\RequiresDependencies`.
-- Security is middleware in the app. `public/.htaccess` only routes requests.
+- PHP 8.3 in the gateway, React in the frontend. All PHP in classes and methods.
+- New data goes through a gateway action. Add a field in the CRM module's vardefs and in `config.php`, and the React screens pick it up from `meta`.
+- Lists use `frontend/src/components/ListView.jsx` (Date Created first, as "3 days ago"). CRM list views keep DATE_ENTERED first.
+- Security is in the gateway (tokens, validation, rate limits). `.htaccess` only routes requests.
+- AI calls go through aisuites.ai, never a provider SDK in a screen.
 
 MD;
     }
@@ -211,7 +290,7 @@ MD;
         $categories = config('playbook.law_categories');
         $rows = $app->laws->map(fn ($l) => "| {$l->code} | ".($categories[$l->category] ?? $l->category)." | {$l->title} | {$this->cell($l->example)} | ".($l->checked_by_core ? 'Automatic' : 'Review').' |')->implode("\n");
 
-        return "# {$app->name} laws\n\nUI and development boundaries. \"Automatic\" laws are checked by `php artisan laws:check` in CI; the rest are checked in review.\n\n| Code | Area | Law | Example | Checked |\n|---|---|---|---|---|\n{$rows}\n";
+        return "# {$app->name} laws\n\nUI and development boundaries. \"Automatic\" laws are checked by `php bin/laws-check.php` in CI; the rest are checked in review.\n\n| Code | Area | Law | Example | Checked |\n|---|---|---|---|---|\n{$rows}\n";
     }
 
     private function visionMd(SaasApp $app): string
@@ -240,7 +319,68 @@ MD;
 
     private function journeyMd(SaasApp $app): string
     {
-        return "# {$app->name} journey\n\nEvery record moves through these phases, stages and statuses. Final statuses are in bold.\n\n".$this->journeyBullets($app)."\n";
+        return "# {$app->name} journey\n\nRecords in {$app->journeyModule()?->name} move through these phases, stages and statuses. Final statuses are in bold; a record moves to the next stage only from a final status.\n\n".$this->journeyBullets($app)."\n";
+    }
+
+    private function modulesMd(SaasApp $app): string
+    {
+        $out = "# {$app->name} CRM modules\n\nEvery module also has Name, Date Created, Date Modified and Assigned User. Required fields are marked *.\n";
+
+        foreach ($app->modules as $module) {
+            $out .= "\n## {$module->name}".($module->is_journey ? ' (journey)' : '')."\n\nCRM module `{$module->crmKey($app->crmPrefix())}`, gateway name `{$module->apiName()}`.\n\n| Field | Key | Type |\n|---|---|---|\n";
+
+            foreach ($module->fields as $field) {
+                $type = $field->type.($field->type_arg ? " ({$field->type_arg})" : '');
+                $key = $field->type === 'relate' ? $field->name.'_id' : $field->name;
+                $out .= "| {$field->label}".($field->is_required ? ' *' : '')." | `{$key}` | {$type} |\n";
+            }
+
+            if ($module->is_journey) {
+                $out .= "| Phase, Stage, Status | `journey_phase`, `journey_stage`, `journey_status` | set by `move` and `advance` |\n";
+            }
+        }
+
+        return $out;
+    }
+
+    private function gatewayMd(SaasApp $app): string
+    {
+        $journey = $app->journeyModule()?->apiName() ?? 'records';
+        $first = $app->modules->first()?->apiName() ?? 'records';
+
+        return <<<MD
+# Smart Gateway
+
+One endpoint for all of {$app->name}'s data: `POST <crm>/index.php?entryPoint=smart_gateway` with a JSON body.
+Every response is `{"ok": true, "data": ...}` or `{"ok": false, "error": {"code", "message", "fields"}}`.
+
+Log in first and send the token as `Authorization: Bearer <token>` on every other call. Tokens are signed with
+`smart_gateway.secret` and expire after 12 hours.
+
+| Action | Body | Returns |
+|---|---|---|
+| `ping` | | app name, no login needed |
+| `login` | `username`, `password` (a CRM user) | `token` |
+| `meta` | | modules, fields and the journey, to build screens from |
+| `list` | `module`, optional `filters` {field: value}, `page`, `per_page` (max 100) | `records` newest first, `total` |
+| `get` | `module`, `id` | the record |
+| `create` | `module`, `data` | the new record; journey records start at the first stage |
+| `update` | `module`, `id`, `data` | the record |
+| `delete` | `module`, `id` | `deleted` |
+| `move` | `module`, `id`, `status` | the record, with a new status in its current stage |
+| `advance` | `module`, `id` | the record, at the next stage (its status must be final) |
+
+Example:
+
+```json
+{"action": "list", "module": "{$first}", "per_page": 10}
+{"action": "move", "module": "{$journey}", "id": "…", "status": "…"}
+```
+
+What the gateway enforces: only known fields, type checks, required fields, related records must exist (law
+L-CODE-001), journey rules, a per-IP request limit, and CORS only for `smart_gateway.allowed_origins`.
+
+MD;
     }
 
     private function journeyBullets(SaasApp $app): string
@@ -271,95 +411,36 @@ MD;
         return implode("\n", $lines);
     }
 
-    // ---- Config ----------------------------------------------------------
+    // ---- Gateway config and workflow classes -----------------------------
 
-    private function workflowConfig(SaasApp $app): string
+    private function gatewayConfig(SaasApp $app): string
     {
-        $classes = $app->phases->map(fn ($p) => '        App\\Workflow\\Phases\\'.Naming::className($p->name).'Phase::class,')->implode("\n");
+        $prefix = $app->crmPrefix();
+        $modules = $app->modules->map(fn ($module) => [
+            'name' => $module->apiName(),
+            'crm_module' => $module->crmKey($prefix),
+            'label' => $module->name,
+            'journey' => $module->is_journey,
+            'fields' => $module->fields->map(fn ($f) => array_filter([
+                'name' => $f->name,
+                'type' => $f->type,
+                'label' => $f->label,
+                'required' => $f->is_required ?: null,
+                'options' => $f->enumOptions() ?: null,
+                'relates_to' => $f->type === 'relate' ? $app->modules->firstWhere('name', $f->type_arg)?->apiName() : null,
+            ], fn ($v) => $v !== null))->all(),
+        ])->all();
 
-        return <<<PHP
-<?php
+        $config = [
+            'app' => $app->name,
+            'workflow' => $app->phases->map(fn ($p) => 'SmartApp\\Workflow\\Phases\\'.Naming::className($p->name).'Phase')->all(),
+            'laws' => $app->laws->pluck('title', 'code')->all(),
+            'modules' => $modules,
+            'acfcm' => collect(config('playbook.acfcm'))->map(fn ($meta, $pillar) => $app->acfcmChoices->where('pillar', $pillar)->map(fn ($c) => $c->item_key ?? $c->label)->values()->all())->all(),
+        ];
 
-// The journey, in order. Each phase class lists its stages; each stage class lists its statuses.
-return [
-
-    'phases' => [
-{$classes}
-    ],
-
-];
-
-PHP;
+        return "<?php\n\n// Generated by the SaaS Builder: the modules, journey and laws the Smart Gateway serves.\n// Change behaviour here (ACFCM: 100% flexible), not in gateway code.\nreturn ".$this->export($config).";\n";
     }
-
-    private function lawsConfig(SaasApp $app): string
-    {
-        $rows = $app->laws->map(fn ($l) => '        '.var_export($l->code, true).' => '.var_export($l->title, true).',')->implode("\n");
-
-        return <<<PHP
-<?php
-
-// Laws this app is built against. `php artisan laws:check` runs the core's check for each code it knows
-// and lists the rest for review.
-return [
-
-    'enabled' => [
-{$rows}
-    ],
-
-];
-
-PHP;
-    }
-
-    private function acfcmConfig(SaasApp $app): string
-    {
-        $out = "<?php\n\n// ACFCM switches chosen in the SaaS Builder. Change behaviour here, not in code.\nreturn [\n\n";
-
-        foreach (config('playbook.acfcm') as $pillar => $meta) {
-            $out .= "    // {$meta['label']}: {$meta['help']}\n    '{$pillar}' => [\n";
-
-            foreach ($meta['items'] as $key => $label) {
-                $out .= "        '{$key}' => ".($app->hasAcfcm($key) ? 'true' : 'false').",\n";
-            }
-
-            foreach ($app->acfcmChoices->where('pillar', $pillar)->whereNull('item_key') as $custom) {
-                $out .= '        '.var_export(Naming::key($custom->label), true)." => true, // {$this->comment($custom->label)}\n";
-            }
-
-            if ($pillar === 'controlling' && ($app->hasAcfcm('feature_toggles') || $app->hasAcfcm('plan_limits'))) {
-                $out .= "\n        // Per plan. A user or team setting overrides its plan.\n        'plans' => [\n";
-                $out .= "            'free' => ['features' => ['ai' => false], 'limits' => ['records' => 100, 'users' => 1, 'ai_credits' => 0]],\n";
-                $out .= "            'pro' => ['features' => ['ai' => true], 'limits' => ['records' => 10000, 'users' => 10, 'ai_credits' => 1000]],\n";
-                $out .= "        ],\n";
-            }
-
-            $out .= "    ],\n\n";
-        }
-
-        return $out."];\n";
-    }
-
-    private function aisuitesConfig(): string
-    {
-        return <<<'PHP'
-<?php
-
-// aisuites.ai is the central LLM platform (law L-AI-001). Every AI call goes through App\Services\Ai\AiSuites.
-return [
-
-    'url' => env('AISUITES_URL', 'https://aisuites.ai/api'),
-
-    'key' => env('AISUITES_KEY'),
-
-    'timeout' => (int) env('AISUITES_TIMEOUT', 30),
-
-];
-
-PHP;
-    }
-
-    // ---- Workflow classes ------------------------------------------------
 
     private function phaseClass($phase): string
     {
@@ -367,12 +448,12 @@ PHP;
         $folder = Naming::className($phase->name);
         $key = Naming::key($phase->name);
         $label = var_export($phase->name, true);
-        $stages = $phase->stages->map(fn ($s) => "            \\App\\Workflow\\Stages\\{$folder}\\".Naming::className($s->name).'Stage::class,')->implode("\n");
+        $stages = $phase->stages->map(fn ($s) => "            \\SmartApp\\Workflow\\Stages\\{$folder}\\".Naming::className($s->name).'Stage::class,')->implode("\n");
 
         return <<<PHP
 <?php
 
-namespace App\Workflow\Phases;
+namespace SmartApp\Workflow\Phases;
 
 use SmartCore\Workflow\Phase;
 
@@ -410,7 +491,7 @@ PHP;
         return <<<PHP
 <?php
 
-namespace App\Workflow\Stages\\{$folder};
+namespace SmartApp\Workflow\Stages\\{$folder};
 
 use SmartCore\Workflow\Stage;
 use SmartCore\Workflow\Status;
@@ -438,472 +519,45 @@ class {$class} extends Stage
 PHP;
     }
 
-    private function selectorClass(string $class, string $doc): string
+    // ---- Install and CI --------------------------------------------------
+
+    private function installScript(SaasApp $app): string
     {
-        return <<<PHP
-<?php
-
-namespace App\Workflow;
-
-use SmartCore\Workflow\\{$class} as CoreSelector;
-
-/**
- * {$doc}
- * Skeleton class: app-specific rules go here; the shared logic stays in Smart Core.
- */
-class {$class} extends CoreSelector
-{
-}
-
-PHP;
-    }
-
-    // ---- Journey starter module -----------------------------------------
-
-    private function journeyMigration(): string
-    {
-        return <<<'PHP'
-<?php
-
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
-
-return new class extends Migration
-{
-    public function up(): void
-    {
-        // Where each record is in the journey. One row per record; history goes in journey_moves.
-        Schema::create('journey_entries', function (Blueprint $table) {
-            $table->id();
-            $table->morphs('subject');
-            $table->string('phase', 60);
-            $table->string('stage', 60);
-            $table->string('status', 60);
-            $table->timestamps();
-            $table->unique(['subject_type', 'subject_id']);
-        });
-
-        Schema::create('journey_moves', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('journey_entry_id')->constrained()->cascadeOnDelete();
-            $table->string('from_phase', 60)->nullable();
-            $table->string('from_stage', 60)->nullable();
-            $table->string('from_status', 60)->nullable();
-            $table->string('to_phase', 60);
-            $table->string('to_stage', 60);
-            $table->string('to_status', 60);
-            $table->timestamps();
-        });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('journey_moves');
-        Schema::dropIfExists('journey_entries');
-    }
-};
-
-PHP;
-    }
-
-    private function journeyModel(): string
-    {
-        return <<<'PHP'
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
-
-class JourneyEntry extends Model
-{
-    protected $fillable = ['subject_type', 'subject_id', 'phase', 'stage', 'status'];
-
-    public function subject(): MorphTo
-    {
-        return $this->morphTo();
-    }
-}
-
-PHP;
-    }
-
-    private function journeyService(SaasApp $app): string
-    {
-        $events = $app->hasAcfcm('journey_events');
-        $useEvent = $events ? "use App\\Events\\JourneyMoved;\n" : '';
-        $fire = $events ? "\n            JourneyMoved::dispatch(\$entry, \$from);\n" : '';
-
-        return <<<PHP
-<?php
-
-namespace App\Services;
-
-{$useEvent}use App\Models\JourneyEntry;
-use App\Workflow\SelectPhase;
-use App\Workflow\SelectStage;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
-use RuntimeException;
-
-/**
- * Starts records on the journey and moves them through statuses, stages and phases.
- */
-class Journey
-{
-    public function __construct(private readonly SelectPhase \$phases, private readonly SelectStage \$stages)
-    {
-    }
-
-    public function start(Model \$subject): JourneyEntry
-    {
-        \$phase = \$this->phases->first();
-        \$stage = \$phase->firstStage();
-
-        return \$this->record(new JourneyEntry([
-            'subject_type' => \$subject->getMorphClass(),
-            'subject_id' => \$subject->getKey(),
-        ]), \$phase->key(), \$stage->key(), \$stage->initialStatus()->key);
-    }
-
-    public function setStatus(JourneyEntry \$entry, string \$status): JourneyEntry
-    {
-        \$this->stages->assertCanMove(\$entry->phase, \$entry->stage, \$entry->status, \$status);
-
-        return \$this->record(\$entry, \$entry->phase, \$entry->stage, \$status);
-    }
-
-    /**
-     * Moves to the next stage (or the next phase's first stage). The current status must be final.
-     */
-    public function advance(JourneyEntry \$entry): JourneyEntry
-    {
-        if (! \$this->stages->find(\$entry->phase, \$entry->stage)->status(\$entry->status)->final) {
-            throw new RuntimeException('Finish this stage (reach a final status) before moving on.');
-        }
-
-        \$next = \$this->stages->next(\$entry->phase, \$entry->stage);
-
-        if (\$next === null) {
-            throw new RuntimeException('This record has finished the journey.');
-        }
-
-        [\$phase, \$stage] = \$next;
-
-        return \$this->record(\$entry, \$phase->key(), \$stage->key(), \$stage->initialStatus()->key);
-    }
-
-    private function record(JourneyEntry \$entry, string \$phase, string \$stage, string \$status): JourneyEntry
-    {
-        return DB::transaction(function () use (\$entry, \$phase, \$stage, \$status) {
-            \$from = \$entry->exists ? \$entry->only(['phase', 'stage', 'status']) : null;
-            \$entry->fill(compact('phase', 'stage', 'status'))->save();
-
-            DB::table('journey_moves')->insert([
-                'journey_entry_id' => \$entry->id,
-                'from_phase' => \$from['phase'] ?? null,
-                'from_stage' => \$from['stage'] ?? null,
-                'from_status' => \$from['status'] ?? null,
-                'to_phase' => \$phase,
-                'to_stage' => \$stage,
-                'to_status' => \$status,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-{$fire}
-            return \$entry;
-        });
-    }
-}
-
-PHP;
-    }
-
-    private function journeyEvent(): string
-    {
-        return <<<'PHP'
-<?php
-
-namespace App\Events;
-
-use App\Models\JourneyEntry;
-use Illuminate\Foundation\Events\Dispatchable;
-
-/**
- * Fired on every journey move, so notifications and jobs react without manual steps (ACFCM: Automation).
- */
-class JourneyMoved
-{
-    use Dispatchable;
-
-    /** @param array{phase: string, stage: string, status: string}|null $from */
-    public function __construct(public readonly JourneyEntry $entry, public readonly ?array $from)
-    {
-    }
-}
-
-PHP;
-    }
-
-    private function journeyController(): string
-    {
-        return <<<'PHP'
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Models\JourneyEntry;
-use App\Workflow\SelectPhase;
-use Illuminate\View\View;
-
-class JourneyController extends Controller
-{
-    public function index(SelectPhase $phases): View
-    {
-        return view('journey.index', [
-            'phases' => $phases->all(),
-            'entries' => JourneyEntry::latest()->limit(100)->get(),
-        ]);
-    }
-}
-
-PHP;
-    }
-
-    private function journeyView(SaasApp $app): string
-    {
-        $name = e($app->name);
-
-        return <<<BLADE
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{$name} journey</title>
-</head>
-<body>
-    <h1>{$name} journey</h1>
-
-    @foreach (\$phases as \$phase)
-        <h2>{{ \$phase->label() }}</h2>
-        <ul>
-            @foreach (\$phase->stages() as \$stage)
-                <li>{{ \$stage->label() }}: {{ collect(\$stage->statuses())->pluck('label')->implode(', ') }}</li>
-            @endforeach
-        </ul>
-    @endforeach
-
-    <h2>Latest entries</h2>
-    <x-smartcore::list-view :rows="\$entries" :columns="['subject_type' => 'Record', 'subject_id' => 'ID', 'phase' => 'Phase', 'stage' => 'Stage', 'status' => 'Status']" />
-</body>
-</html>
-
-BLADE;
-    }
-
-    private function routes(): string
-    {
-        return <<<'PHP'
-<?php
-
-use App\Http\Controllers\JourneyController;
-use Illuminate\Support\Facades\Route;
-
-// Law L-CODE-002: every route points at a controller method.
-Route::redirect('/', '/journey');
-Route::get('/journey', [JourneyController::class, 'index'])->name('journey.index');
-
-PHP;
-    }
-
-    private function featuresClass(): string
-    {
-        return <<<'PHP'
-<?php
-
-namespace App\Support;
-
-/**
- * Feature and limit controller (ACFCM: Controlling features). Reads config/acfcm.php plans.
- * Wire $overrides from the user's or team's settings when the core's billing module lands.
- */
-class Features
-{
-    public static function enabled(string $feature, string $plan = 'free', array $overrides = []): bool
-    {
-        return (bool) ($overrides['features'][$feature] ?? config("acfcm.controlling.plans.{$plan}.features.{$feature}", false));
-    }
-
-    public static function limit(string $limit, string $plan = 'free', array $overrides = []): int
-    {
-        return (int) ($overrides['limits'][$limit] ?? config("acfcm.controlling.plans.{$plan}.limits.{$limit}", 0));
-    }
-}
-
-PHP;
-    }
-
-    private function aisuitesClient(SaasApp $app): string
-    {
-        $logs = $app->hasAcfcm('ai_feedback_log');
-        $logMethod = $logs ? <<<'PHP'
-
-    /**
-     * Log an AI output a user edited, so it becomes eval data (ACFCM: Machine learning).
-     */
-    public function logEdit(string $feature, string $prompt, string $aiOutput, string $userOutput): void
-    {
-        DB::table('ai_feedback')->insert([
-            'feature' => $feature,
-            'prompt' => $prompt,
-            'ai_output' => $aiOutput,
-            'user_output' => $userOutput,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-    }
-PHP : '';
-        $useDb = $logs ? "use Illuminate\\Support\\Facades\\DB;\n" : '';
-
-        return <<<PHP
-<?php
-
-namespace App\Services\Ai;
-
-{$useDb}use Illuminate\Support\Facades\Http;
-use RuntimeException;
-
-/**
- * The only door to AI in this app (law L-AI-001). Adjust the request shape to the aisuites.ai API you use.
- */
-class AiSuites
-{
-    public function complete(string \$feature, string \$prompt): string
-    {
-        if (! config('aisuites.key')) {
-            throw new RuntimeException('Set AISUITES_KEY in .env to use AI features.');
-        }
-
-        \$response = Http::withToken(config('aisuites.key'))
-            ->timeout(config('aisuites.timeout'))
-            ->post(rtrim(config('aisuites.url'), '/').'/complete', ['feature' => \$feature, 'prompt' => \$prompt])
-            ->throw();
-
-        return (string) \$response->json('text');
-    }
-{$logMethod}
-}
-
-PHP;
-    }
-
-    private function aiFeedbackMigration(): string
-    {
-        return <<<'PHP'
-<?php
-
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
-
-return new class extends Migration
-{
-    public function up(): void
-    {
-        Schema::create('ai_feedback', function (Blueprint $table) {
-            $table->id();
-            $table->string('feature', 60);
-            $table->text('prompt');
-            $table->text('ai_output');
-            $table->text('user_output');
-            $table->timestamps();
-        });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('ai_feedback');
-    }
-};
-
-PHP;
-    }
-
-    // ---- Tests and CI ----------------------------------------------------
-
-    private function lawsTest(): string
-    {
-        return <<<'PHP'
-<?php
-
-namespace Tests\Feature;
-
-use Tests\TestCase;
-
-class LawsTest extends TestCase
-{
-    public function test_the_app_keeps_its_laws(): void
-    {
-        $this->artisan('laws:check')->assertSuccessful();
-    }
-}
-
-PHP;
-    }
-
-    private function journeyTest(SaasApp $app): string
-    {
-        $phases = $app->phases->count();
-        $first = $app->phases->first();
-        $firstStage = $first?->stages->first();
-        $firstPhaseKey = var_export(Naming::key($first?->name ?? ''), true);
-        $firstStageKey = var_export(Naming::key($firstStage?->name ?? ''), true);
-        $firstStatusKey = var_export(Naming::key($firstStage?->statuses->first()?->name ?? ''), true);
-
-        return <<<PHP
-<?php
-
-namespace Tests\Feature;
-
-use App\Models\User;
-use App\Services\Journey;
-use App\Workflow\SelectPhase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
-
-class JourneyTest extends TestCase
-{
-    use RefreshDatabase;
-
-    public function test_the_journey_has_every_phase(): void
-    {
-        \$this->assertCount({$phases}, app(SelectPhase::class)->all());
-    }
-
-    public function test_a_record_starts_at_the_first_stage(): void
-    {
-        \$entry = app(Journey::class)->start(User::factory()->create());
-
-        \$this->assertSame([{$firstPhaseKey}, {$firstStageKey}, {$firstStatusKey}], [\$entry->phase, \$entry->stage, \$entry->status]);
-    }
-
-    public function test_the_journey_screen_loads(): void
-    {
-        \$this->get('/journey')->assertOk();
-    }
-}
-
-PHP;
+        return <<<BASH
+#!/usr/bin/env bash
+# Copies the {$app->name} modules and the Smart Gateway into a SuiteCRM copy.
+# Usage: ./install-crm.sh /path/to/suitecrm
+set -euo pipefail
+
+HERE="\$(cd "\$(dirname "\$0")" && pwd)"
+CRM="\${1:-}"
+
+if [ -z "\$CRM" ] || [ ! -f "\$CRM/config.php" ]; then
+  echo "Give the path to your SuiteCRM copy (the folder with config.php):"
+  echo "  ./install-crm.sh /var/www/suitecrm"
+  exit 1
+fi
+
+php "\$HERE/bin/laws-check.php"
+cp -R "\$HERE/crm/." "\$CRM/"
+
+echo
+echo "Copied. Next, in the CRM: Admin > Repair > Quick Repair and Rebuild, and run the SQL it shows."
+echo "Then add this to \$CRM/config_override.php:"
+echo
+echo "\\\$sugar_config['smart_gateway'] = ["
+echo "    'secret' => '\$(php -r 'echo bin2hex(random_bytes(32));')',"
+echo "    'allowed_origins' => ['http://localhost:5173'],"
+echo "    'requests_per_minute' => 120,"
+echo "];"
+
+BASH;
     }
 
     private function ciWorkflow(): string
     {
         return <<<'YAML'
-# Laws in CI: every pull request runs laws:check and the tests. A broken law blocks the merge.
-# Smart Core is read from the AshishOutright/claude repo; add a CORE_REPO_TOKEN secret that can read it.
+# Laws in CI: every pull request checks the laws, runs the gateway smoke test and builds the React app.
 name: Laws
 
 on:
@@ -917,66 +571,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-        with:
-          repository: AshishOutright/claude
-          token: ${{ secrets.CORE_REPO_TOKEN }}
-          path: .smart-core-src
-
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
-
-      - name: Install
-        run: |
-          composer config repositories.smart-core path .smart-core-src/smart-core
-          composer install --no-interaction --prefer-dist
-          cp .env.example .env
-          php artisan key:generate
+          php-version: "8.3"
 
       - name: Laws
-        run: php artisan laws:check
+        run: php bin/laws-check.php
 
-      - name: Tests
-        run: php artisan test
+      - name: Smart Gateway smoke test
+        run: php tests/gateway-smoke.php
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build the React app
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
 
 YAML;
-    }
-
-    private function installScript(SaasApp $app): string
-    {
-        return <<<BASH
-#!/usr/bin/env bash
-# Creates {$app->name} on a fresh Laravel app with Smart Core installed.
-# Usage: ./install.sh [folder] [path to smart-core]
-set -euo pipefail
-
-HERE="\$(cd "\$(dirname "\$0")" && pwd)"
-TARGET="\${1:-{$app->slug}}"
-CORE="\${2:-\${SMART_CORE_PATH:-}}"
-
-if [ -z "\$CORE" ] || [ ! -f "\$CORE/composer.json" ]; then
-  echo "Give the path to smart-core (the folder in the AshishOutright/claude repo):"
-  echo "  ./install.sh {$app->slug} /path/to/claude/smart-core"
-  exit 1
-fi
-CORE="\$(cd "\$CORE" && pwd)"
-
-composer create-project laravel/laravel "\$TARGET" --no-interaction
-cp -R "\$HERE/app-files/." "\$TARGET/"
-cd "\$TARGET"
-rm -f tests/Feature/ExampleTest.php tests/Unit/ExampleTest.php resources/views/welcome.blade.php
-[ -f .env ] || cp .env.example .env
-grep -q '^APP_KEY=base64' .env || php artisan key:generate --no-interaction
-composer config repositories.smart-core path "\$CORE"
-composer require outright/smart-core:@dev --no-interaction
-[ -d .git ] || git init -q
-
-php artisan laws:check
-echo
-echo "{$app->name} is ready in \$TARGET. Set your MySQL details in .env, then run: php artisan migrate"
-
-BASH;
     }
 
     // ---- Helpers ---------------------------------------------------------
@@ -996,14 +611,21 @@ BASH;
         return str_replace(['|', "\n"], ['\|', ' '], (string) $text);
     }
 
-    private function comment(string $text): string
+    private function export(array $value, int $depth = 0): string
     {
-        return str_replace(["\n", '*/'], [' ', ''], $text);
-    }
+        if ($value === []) {
+            return '[]';
+        }
 
-    /** @return Collection<int, string> */
-    public function listFiles(SaasApp $app): Collection
-    {
-        return collect(array_keys($this->files($app)));
+        $pad = str_repeat('    ', $depth + 1);
+        $isList = array_is_list($value);
+        $lines = [];
+
+        foreach ($value as $k => $v) {
+            $item = is_array($v) ? $this->export($v, $depth + 1) : var_export($v, true);
+            $lines[] = $pad.($isList ? '' : var_export($k, true).' => ').$item.',';
+        }
+
+        return "[\n".implode("\n", $lines)."\n".str_repeat('    ', $depth).']';
     }
 }

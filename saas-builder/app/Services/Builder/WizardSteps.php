@@ -3,7 +3,7 @@
 namespace App\Services\Builder;
 
 /**
- * The wizard follows the playbook order: constitution, laws, vision, journey, then the ACFCM bar.
+ * The wizard follows the playbook order: constitution, laws, vision, CRM modules, journey, then the ACFCM bar.
  */
 class WizardSteps
 {
@@ -12,6 +12,7 @@ class WizardSteps
         'constitutions' => 'Constitution',
         'laws' => 'Laws',
         'vision' => 'Core Vision',
+        'modules' => 'CRM modules',
         'journey' => 'Phases, stages, statuses',
         'acfcm' => 'ACFCM',
         'review' => 'Review and generate',

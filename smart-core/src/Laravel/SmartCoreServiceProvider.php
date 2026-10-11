@@ -1,9 +1,8 @@
 <?php
 
-namespace SmartCore;
+namespace SmartCore\Laravel;
 
 use Illuminate\Support\ServiceProvider;
-use SmartCore\Console\CheckLaws;
 use SmartCore\Laws\LawRegistry;
 use SmartCore\Workflow\SelectPhase;
 use SmartCore\Workflow\SelectStage;
@@ -24,7 +23,7 @@ class SmartCoreServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadViewsFrom(__DIR__.'/../resources/views', 'smartcore');
+        $this->loadViewsFrom(__DIR__.'/../../resources/views', 'smartcore');
 
         if ($this->app->runningInConsole()) {
             $this->commands([CheckLaws::class]);

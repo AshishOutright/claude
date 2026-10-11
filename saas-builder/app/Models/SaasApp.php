@@ -38,6 +38,24 @@ class SaasApp extends Model
         return $this->hasMany(AppPhase::class)->orderBy('position');
     }
 
+    public function modules(): HasMany
+    {
+        return $this->hasMany(AppModule::class)->orderBy('position');
+    }
+
+    public function journeyModule(): ?AppModule
+    {
+        return $this->modules->firstWhere('is_journey', true);
+    }
+
+    /** Prefix for CRM module keys and tables, e.g. "hrcrm" for hrcrm_Candidates. */
+    public function crmPrefix(): string
+    {
+        $prefix = substr(preg_replace('/[^a-z0-9]/', '', strtolower($this->slug)), 0, 8);
+
+        return preg_match('/^[a-z]/', $prefix) ? $prefix : 'app'.$prefix;
+    }
+
     public function acfcmChoices(): HasMany
     {
         return $this->hasMany(AcfcmChoice::class);

@@ -34,7 +34,7 @@ class NewAppWizardTest extends TestCase
         $this->post('/apps', ['name' => 'Task CRM', 'template' => 'task-crm']);
         $app = SaasApp::where('slug', 'task-crm')->firstOrFail();
 
-        foreach (['basics', 'constitutions', 'laws', 'vision', 'journey', 'acfcm', 'review'] as $step) {
+        foreach (['basics', 'constitutions', 'laws', 'vision', 'modules', 'journey', 'acfcm', 'review'] as $step) {
             $this->get("/apps/task-crm/{$step}")->assertOk();
         }
 
@@ -57,7 +57,13 @@ class NewAppWizardTest extends TestCase
         $this->put('/apps/task-crm/vision', [
             'core_vision' => 'Every client task is tracked from intake to feedback.',
             'team_vision' => 'No task is lost.',
-        ])->assertRedirect('/apps/task-crm/journey');
+        ])->assertRedirect('/apps/task-crm/modules');
+
+        $this->put('/apps/task-crm/modules', ['modules' => "Tasks*: due:date!, client:relate(Clients)!\nClients: email:email"])
+            ->assertRedirect('/apps/task-crm/journey');
+
+        $this->assertSame(['Tasks', 'Clients'], $app->modules()->pluck('name')->all());
+        $this->assertSame(['name', 'due', 'client'], $app->modules()->first()->fields()->pluck('name')->all());
 
         $this->put('/apps/task-crm/journey', ['outline' => "Plan\n- Intake: New, Accepted*"])
             ->assertRedirect('/apps/task-crm/acfcm');
@@ -83,12 +89,12 @@ class NewAppWizardTest extends TestCase
             ->assertSessionHasErrors('outline');
     }
 
-    public function test_generate_builds_a_starter_app_on_smart_core(): void
+    public function test_generate_builds_crm_modules_smart_gateway_and_react_app(): void
     {
         $this->post('/apps', ['name' => 'HR CRM', 'template' => 'hr-crm']);
         $this->put('/apps/hr-crm/vision', ['core_vision' => 'Hire to exit in one place.', 'team_vision' => 'One record per employee, from offer to full and final.']);
 
-        $response = $this->post('/apps/hr-crm/generate')->assertOk()->assertDownload('hr-crm-starter.zip');
+        $response = $this->post('/apps/hr-crm/generate')->assertOk()->assertDownload('hr-crm.zip');
 
         $zip = new ZipArchive();
         $this->assertTrue($zip->open($response->baseResponse->getFile()->getPathname()));
@@ -98,37 +104,81 @@ class NewAppWizardTest extends TestCase
         }
 
         foreach ([
-            'hr-crm-starter/install.sh',
-            'hr-crm-starter/app-files/CLAUDE.md',
-            'hr-crm-starter/app-files/config/workflow.php',
-            'hr-crm-starter/app-files/config/laws.php',
-            'hr-crm-starter/app-files/app/Workflow/Phases/OnboardingPhase.php',
-            'hr-crm-starter/app-files/app/Workflow/Stages/Exit/FullAndFinalStage.php',
-            'hr-crm-starter/app-files/app/Services/Ai/AiSuites.php',
+            'hr-crm/CLAUDE.md',
+            'hr-crm/install-crm.sh',
+            'hr-crm/crm/modules/hrcrm_Employees/vardefs.php',
+            'hr-crm/crm/modules/hrcrm_Departments/metadata/listviewdefs.php',
+            'hr-crm/crm/custom/Extension/application/Ext/EntryPointRegistry/hr-crm_smart_gateway.php',
+            'hr-crm/crm/custom/smart_gateway/entry.php',
+            'hr-crm/crm/custom/smart_gateway/config.php',
+            'hr-crm/crm/custom/smart_gateway/core/Gateway/Gateway.php',
+            'hr-crm/crm/custom/smart_gateway/app/Workflow/Stages/Exit/FullAndFinalStage.php',
+            'hr-crm/frontend/src/sg.js',
+            'hr-crm/frontend/.env.example',
+            'hr-crm/frontend/package.json',
         ] as $expected) {
             $this->assertContains($expected, $names);
         }
 
-        $this->assertStringContainsString('One record per employee', $zip->getFromName('hr-crm-starter/app-files/CLAUDE.md'));
-        $this->assertStringContainsString("new Status('paid', 'Paid', final: true)", $zip->getFromName('hr-crm-starter/app-files/app/Workflow/Stages/Exit/FullAndFinalStage.php'));
+        $this->assertNotContains('hr-crm/crm/custom/smart_gateway/core/Laravel/CheckLaws.php', $names);
+        $this->assertStringContainsString('One record per employee', $zip->getFromName('hr-crm/CLAUDE.md'));
+        $this->assertStringContainsString("'module' => 'hrcrm_Departments'", $zip->getFromName('hr-crm/crm/modules/hrcrm_Employees/vardefs.php'));
+        $this->assertStringContainsString("'rhs_key' => 'department_id'", $zip->getFromName('hr-crm/crm/modules/hrcrm_Employees/vardefs.php'));
+        $this->assertStringContainsString('<title>HR CRM</title>', $zip->getFromName('hr-crm/frontend/index.html'));
         $this->assertNotNull(SaasApp::where('slug', 'hr-crm')->value('generated_at'));
     }
 
-    public function test_every_generated_php_file_is_valid_php(): void
+    public function test_a_generated_app_passes_its_laws_and_gateway_smoke_test(): void
     {
-        $this->post('/apps', ['name' => 'Social CRM', 'template' => 'social-crm']);
-        $this->post('/apps/social-crm/generate')->assertOk();
+        foreach (['hr-crm', 'task-crm', 'social-crm', 'blank'] as $template) {
+            $slug = "check-{$template}";
+            $this->post('/apps', ['name' => "Check {$template}", 'slug' => $slug, 'template' => $template]);
+            $this->post("/apps/{$slug}/generate")->assertOk();
 
-        $root = storage_path('app/generated/social-crm-starter');
+            $root = storage_path("app/generated/{$slug}");
 
-        foreach (File::allFiles($root, true) as $file) {
-            if (str_ends_with($file->getFilename(), '.php')) {
-                exec('php -l '.escapeshellarg($file->getPathname()).' 2>&1', $output, $code);
-                $this->assertSame(0, $code, implode("\n", $output));
+            foreach (File::allFiles($root, true) as $file) {
+                if (str_ends_with($file->getFilename(), '.php')) {
+                    exec('php -l '.escapeshellarg($file->getPathname()).' 2>&1', $output, $code);
+                    $this->assertSame(0, $code, implode("\n", $output));
+                }
             }
-        }
 
+            foreach (['bin/laws-check.php', 'tests/gateway-smoke.php'] as $script) {
+                $output = [];
+                exec('php '.escapeshellarg("{$root}/{$script}").' 2>&1', $output, $code);
+                $this->assertSame(0, $code, "{$template} {$script}:\n".implode("\n", $output));
+            }
+
+            File::deleteDirectory($root);
+            File::delete(storage_path("app/generated/{$slug}.zip"));
+        }
+    }
+
+    public function test_the_laws_check_catches_a_crm_list_view_without_date_created_first(): void
+    {
+        $this->post('/apps', ['name' => 'Broken List', 'template' => 'blank']);
+        $this->post('/apps/broken-list/generate')->assertOk();
+
+        $root = storage_path('app/generated/broken-list');
+        $file = "{$root}/crm/modules/brokenli_Records/metadata/listviewdefs.php";
+        File::put($file, "<?php\n\$listViewDefs['brokenli_Records'] = ['NAME' => [], 'DATE_ENTERED' => []];\n");
+
+        exec('php '.escapeshellarg("{$root}/bin/laws-check.php").' 2>&1', $output, $code);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('must list DATE_ENTERED first', implode("\n", $output));
         File::deleteDirectory($root);
+    }
+
+    public function test_module_mistakes_show_what_to_fix(): void
+    {
+        $this->post('/apps', ['name' => 'Bad Modules', 'template' => 'blank']);
+
+        $this->from('/apps/bad-modules/modules')
+            ->put('/apps/bad-modules/modules', ['modules' => "Tasks: owner:relate(People)\nPeople: deleted"])
+            ->assertRedirect('/apps/bad-modules/modules')
+            ->assertSessionHasErrors('modules');
     }
 
     public function test_the_app_list_puts_date_created_first(): void

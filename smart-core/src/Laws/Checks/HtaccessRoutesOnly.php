@@ -9,6 +9,8 @@ class HtaccessRoutesOnly implements Law
 {
     private const SECURITY_DIRECTIVES = '/^\s*(Deny|Allow\s+from|Order\s|Require\s|AuthType|AuthUserFile|AuthName|Satisfy)\b/i';
 
+    private const FILES = ['.htaccess', 'public/.htaccess', 'crm/.htaccess', 'frontend/public/.htaccess'];
+
     public function code(): string
     {
         return 'L-SEC-001';
@@ -23,14 +25,16 @@ class HtaccessRoutesOnly implements Law
     {
         $problems = [];
 
-        foreach ([$basePath.'/.htaccess', $basePath.'/public/.htaccess'] as $path) {
+        foreach (self::FILES as $relative) {
+            $path = $basePath.'/'.$relative;
+
             if (! is_file($path)) {
                 continue;
             }
 
             foreach (file($path) as $number => $line) {
                 if (preg_match(self::SECURITY_DIRECTIVES, $line)) {
-                    $problems[] = basename(dirname($path)).'/.htaccess:'.($number + 1).' has an access rule; enforce it with app middleware instead.';
+                    $problems[] = $relative.':'.($number + 1).' has an access rule; enforce it in the app (Smart Gateway or middleware) instead.';
                 }
             }
         }
