@@ -1,4 +1,4 @@
-# Render Blueprint: deploys both apps as password-protected web services.
+# Render Blueprint: deploys the apps as password-protected web services.
 # Deploy: https://render.com/deploy?repo=https://github.com/AshishOutright/claude
 # Render asks for every value marked `sync: false` during setup.
 services:
@@ -64,3 +64,19 @@ services:
         generateValue: true
       - key: SECRET_KEY
         generateValue: true
+
+  - type: web
+    name: saas-builder
+    runtime: docker
+    plan: free
+    dockerfilePath: ./saas-builder/Dockerfile
+    dockerContext: .              # the builder installs Smart Core from ./smart-core
+    autoDeploy: true              # deploy every push to main...
+    buildFilter:                  # ...but only when the builder or Smart Core changes
+      paths:
+        - saas-builder/**
+        - smart-core/**
+    healthCheckPath: /up
+    envVars:
+      - key: BUILDER_PASSWORD     # password to open the builder
+        sync: false

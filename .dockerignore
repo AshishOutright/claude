@@ -1,0 +1,10 @@
+**/vendor
+**/node_modules
+**/.env
+**/storage/logs/*
+**/storage/framework/*/*
+**/storage/app/generated
+**/database/*.sqlite
+**/.phpunit.result.cache
+**/bootstrap/cache/*.php
+.git
