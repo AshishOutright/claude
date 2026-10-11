@@ -49,6 +49,14 @@ php artisan serve         # http://localhost:8000
 Set the MySQL details and `BUILDER_PASSWORD` in `.env` first. Without a password the builder only opens with
 `APP_ENV=local`.
 
+### On Render
+
+The repo's `render.yaml` includes a `saas-builder` service (Docker, free plan). In Render, open the Blueprint for
+this repo and click **Sync** (or use the Deploy to Render button in the root README), then set `BUILDER_PASSWORD`.
+On the free plan the builder sleeps after 15 minutes idle and its SQLite data (apps you started, library additions)
+is wiped on each redeploy. For data that lasts, add a disk at `/app/saas-builder/database` on a paid plan, or point
+`DB_CONNECTION=mysql` and the `DB_*` settings at your MySQL.
+
 ```bash
 php artisan test          # wizard, generator, generated-app laws and Smart Core gateway tests
 php artisan laws:check    # the builder keeps the laws it hands out

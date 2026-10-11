@@ -31,10 +31,11 @@ The script creates a virtual environment, installs dependencies, copies `.env.ex
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/AshishOutright/claude)
 
 1. Click the button above and sign in to Render with GitHub.
-2. Render reads `render.yaml` and creates both apps. Fill in the values it asks for:
+2. Render reads `render.yaml` and creates the apps. Fill in the values it asks for:
    - `APP_PASSWORD`: the password you'll use to open each app (**required**, or anyone could use your API credits)
    - `ANTHROPIC_API_KEY`: your Claude key
    - Job Finder only: `FREELANCER_PROFILE`, and the Upwork keys (leave blank for demo mode)
+   - SaaS Builder only: `BUILDER_PASSWORD`, the password for its login page
 3. Click **Apply**. After a few minutes you get public links such as
    `https://claude-code-center.onrender.com` and `https://upwork-job-finder.onrender.com`
    (Render adds a suffix if the name is taken; the exact links are on your Render dashboard).
